@@ -1,5 +1,5 @@
 import nyc3dcars
-from sqlalchemy import *
+from sqlalchemy import func
 
 import sys
 from collections import namedtuple
@@ -10,12 +10,13 @@ import logging
 import pygeo
 
 import gdal
-from gdalconst import *
+from gdalconst import GA_ReadOnly
 
-alt_diff_cache = {}
-horizon_cache = {}
-elevation_raster = None
-geoidheight_raster = None
+__ALT_DIFF_CACHE__ = {}
+__HORIZON_CACHE__ = {}
+__ELEVATION_RASTER__ = None
+__GEOIDHEIGHT_RASTER__ = None
+
 
 def read_elevation_raster(session):
     name = 'elevation-cached.tif'
@@ -31,12 +32,12 @@ def read_elevation_raster(session):
         raster, = session.query(gtiff) \
             .one()
 
-        with open(name, 'wb') as fd:
-            fd.write(raster)
+        with open(name, 'wb') as raster_file:
+            raster_file.write(raster)
 
         dataset = gdal.Open(name, GA_ReadOnly)
 
-    return parseDataset(dataset)
+    return parse_dataset(dataset)
 
 
 def read_geoidheights_raster(session):
@@ -53,19 +54,19 @@ def read_geoidheights_raster(session):
         raster, = session.query(gtiff) \
             .one()
 
-        with open(name, 'wb') as fd:
-            fd.write(raster)
+        with open(name, 'wb') as raster_file:
+            raster_file.write(raster)
 
         dataset = gdal.Open(name, GA_ReadOnly)
 
-    return parseDataset(dataset)
+    return parse_dataset(dataset)
 
-Dataset = namedtuple('Dataset', 'data, x, y, width, height')
+__Dataset__ = namedtuple('__Dataset__', 'data, x, y, width, height')
 
 
-def parseDataset(dataset):
+def parse_dataset(dataset):
     geotransform = dataset.GetGeoTransform()
-    return Dataset(
+    return __Dataset__(
         data=dataset.ReadAsArray(),
         x=geotransform[0],
         y=geotransform[3],
@@ -84,7 +85,6 @@ def index_raster(dataset, lat, lon):
 
 
 def roadbed_query(session, detection):
-    photo = detection.photo
     car_lla = detection.lonlat
 
     roadbeds4326 = func.ST_Transform(nyc3dcars.Roadbed.geom, 4326)
@@ -100,7 +100,6 @@ def roadbed_query(session, detection):
 
 
 def centerline_query(session, detection):
-    ex_cam_angle = nyc3dcars.Detection.world_angle
     car_polygon = nyc3dcars.Detection.geom
     car_polygon102718 = func.ST_Transform(car_polygon, 102718)
     car_filter = func.ST_Intersects(
@@ -114,7 +113,7 @@ def centerline_query(session, detection):
     road_gids = query.all()
 
     if len(road_gids) == 0:
-        return 
+        return
 
     lat, lon, alt = session.query(
         func.ST_Y(nyc3dcars.Detection.lla),
@@ -123,20 +122,20 @@ def centerline_query(session, detection):
         .filter(nyc3dcars.Detection.id == detection.id) \
         .one()
     lla = numpy.array([[lat, lon, alt]])
-    enu = pygeo.LLAToENU(lla).reshape((3,3))
+    enu = pygeo.LLAToENU(lla).reshape((3, 3))
 
     roadbeds4326 = func.ST_Transform(nyc3dcars.Roadbed.geom, 4326)
 
     centerlines4326 = nyc3dcars.OsmLine.way
     centerline_filter = func.ST_Intersects(roadbeds4326, centerlines4326)
-    car_centerline_dist = func.ST_Distance(nyc3dcars.Detection.lla, centerlines4326)
-    centerline_frac = func.ST_Line_Locate_Point(centerlines4326, nyc3dcars.Detection.lla)
+    centerline_frac = func.ST_Line_Locate_Point(
+        centerlines4326, nyc3dcars.Detection.lla)
     centerline_start_frac = func.least(1, centerline_frac + 0.01)
     centerline_end_frac = func.greatest(0, centerline_frac - 0.01)
     centerline_start = func.ST_Line_Interpolate_Point(centerlines4326,
-        centerline_start_frac)
+                                                      centerline_start_frac)
     centerline_end = func.ST_Line_Interpolate_Point(centerlines4326,
-        centerline_end_frac)
+                                                    centerline_end_frac)
 
     segments = session.query(
         func.ST_Y(centerline_start).label('lats'),
@@ -144,7 +143,7 @@ def centerline_query(session, detection):
 
         func.ST_Y(centerline_end).label('late'),
         func.ST_X(centerline_end).label('lone'),
-        
+
         nyc3dcars.OsmLine.oneway) \
         .filter(nyc3dcars.Detection.id == detection.id) \
         .filter(centerline_filter) \
@@ -152,10 +151,11 @@ def centerline_query(session, detection):
         .filter(nyc3dcars.OsmLine.osm_id >= 0) \
         .filter(nyc3dcars.OsmLine.railway.__eq__(None))
 
-
     for segment in segments:
-        segment_start = pygeo.LLAToECEF(numpy.array([[segment.lats, segment.lons, alt]], dtype=numpy.float64))
-        segment_end = pygeo.LLAToECEF(numpy.array([[segment.late, segment.lone, alt]], dtype=numpy.float64))
+        segment_start = pygeo.LLAToECEF(
+            numpy.array([[segment.lats, segment.lons, alt]], dtype=numpy.float64))
+        segment_end = pygeo.LLAToECEF(
+            numpy.array([[segment.late, segment.lone, alt]], dtype=numpy.float64))
 
         segment_dir = (segment_end - segment_start)
         segment_dir /= numpy.linalg.norm(segment_dir)
@@ -165,6 +165,7 @@ def centerline_query(session, detection):
         segment_angle = math.atan2(segment_rot[1], segment_rot[0])
 
         yield segment_angle, segment.oneway
+
 
 def elevation_query(session, detection, elevation_raster, geoidheight_raster):
     car_lla = nyc3dcars.Detection.lla
@@ -176,12 +177,13 @@ def elevation_query(session, detection, elevation_raster, geoidheight_raster):
     lat, lon, alt = query.one()
 
     elevation = index_raster(elevation_raster, lat, lon)
-    geoidheight = index_raster(geoidheight_raster, lat, lon if lon > 0 else lon + 360)
+    geoidheight = index_raster(
+        geoidheight_raster, lat, lon if lon > 0 else lon + 360)
 
     return alt - elevation - geoidheight
 
+
 def coverage_query(session, detection):
-    ex_cam_angle = nyc3dcars.Detection.world_angle
     car_polygon = nyc3dcars.Detection.geom
     car_polygon102718 = func.ST_Transform(car_polygon, 102718)
     car_road_intersection = func.ST_Area(
@@ -200,21 +202,24 @@ def coverage_query(session, detection):
         coverage = 0
     return coverage
 
+
 def centerline_angle_diff(detection, centerline_angle, oneway):
-    ex_cam_angle = detection.world_angle - math.pi/2
-    diff = math.acos(math.cos(centerline_angle - ex_cam_angle)) 
+    ex_cam_angle = detection.world_angle - math.pi / 2
+    diff = math.acos(math.cos(centerline_angle - ex_cam_angle))
     twoway_types = ('undefined', 'reversible', 'yes; no', '-1', 'no', None)
     if oneway in twoway_types:
-        newDiff = math.acos(math.cos(math.pi + centerline_angle - ex_cam_angle))
-        if newDiff < diff:
-            diff = newDiff
+        new_diff = math.acos(
+            math.cos(math.pi + centerline_angle - ex_cam_angle))
+        if new_diff < diff:
+            diff = new_diff
     return diff
 
-def get_horizon_endpoints(session, photo):
-    if photo.id in horizon_cache:
-        return horizon_cache[photo.id]
 
-    logging.info('computing horizon endpoints %d'%photo.id)
+def get_horizon_endpoints(session, photo):
+    if photo.id in __HORIZON_CACHE__:
+        return __HORIZON_CACHE__[photo.id]
+
+    logging.info('computing horizon endpoints %d' % photo.id)
 
     lon, lat, alt = session.query(
         func.ST_X(nyc3dcars.Photo.lla),
@@ -225,7 +230,7 @@ def get_horizon_endpoints(session, photo):
 
     point = numpy.array([[lat, lon, alt]])
 
-    ENU = pygeo.LLAToENU(point).reshape((3,3))
+    enu = pygeo.LLAToENU(point).reshape((3, 3))
 
     R = numpy.array([
         [photo.r11, photo.r12, photo.r13],
@@ -234,69 +239,74 @@ def get_horizon_endpoints(session, photo):
     ])
 
     K = numpy.array([
-        [photo.focal,            0,  photo.width/2],
-        [          0,  photo.focal, photo.height/2],
-        [          0,            0,              1],
+        [photo.focal,            0,  photo.width / 2],
+        [0,  photo.focal, photo.height / 2],
+        [0,            0,              1],
     ])
 
-    P = K.dot(R.dot(ENU))
+    P = K.dot(R.dot(enu))
 
-    h = numpy.cross(P[:,0], P[:,1])
+    h = numpy.cross(P[:, 0], P[:, 1])
 
-    m = -h[0]/h[1]
-    b = -h[2]/h[1]
+    m = -h[0] / h[1]
+    b = -h[2] / h[1]
 
     endpoints = numpy.array([
-        [0, (m*photo.width+b)/photo.height],
-        [1, b/photo.height],
+        [0, (m * photo.width + b) / photo.height],
+        [1, b / photo.height],
     ])
 
-    horizon_cache[photo.id] = endpoints
-    return horizon_cache[photo.id]
+    __HORIZON_CACHE__[photo.id] = endpoints
+    return __HORIZON_CACHE__[photo.id]
+
 
 def score_horizon(session, detection):
     endpoints = get_horizon_endpoints(session, detection.photo)
 
-    Ax = endpoints[0,0]
-    Ay = endpoints[0,1]
-    Bx = endpoints[1,0]
-    By = endpoints[1,1]
-    
+    Ax = endpoints[0, 0]
+    Ay = endpoints[0, 1]
+    Bx = endpoints[1, 0]
+    By = endpoints[1, 1]
+
     Cx1 = detection.x1
     Cy1 = detection.y2
     Cx2 = detection.x2
     Cy2 = detection.y2
 
-    score1 = (Bx-Ax)*(Cy1-Ay)-(By-Ay)*(Cx1-Ax)
-    score2 = (Bx-Ax)*(Cy2-Ay)-(By-Ay)*(Cx2-Ax)
+    score1 = (Bx - Ax) * (Cy1 - Ay) - (By - Ay) * (Cx1 - Ax)
+    score2 = (Bx - Ax) * (Cy2 - Ay) - (By - Ay) * (Cx2 - Ax)
 
     return 1 if score1 > 0 and score2 > 0 else 0
 
+
 def get_alt_diff(session, detection):
-    global elevation_raster
-    global geoidheight_raster
+    global __ELEVATION_RASTER__
+    global __GEOIDHEIGHT_RASTER__
 
-    if detection.id in alt_diff_cache:
-        return alt_diff_cache[detection.id]
+    if detection.id in __ALT_DIFF_CACHE__:
+        return __ALT_DIFF_CACHE__[detection.id]
 
-    if elevation_raster is None:
+    if __ELEVATION_RASTER__ is None:
         logging.info('loading elevation raster')
-        elevation_raster = read_elevation_raster(session)
+        __ELEVATION_RASTER__ = read_elevation_raster(session)
 
-    if geoidheight_raster is None:
+    if __GEOIDHEIGHT_RASTER__ is None:
         logging.info('loading geoidheight raster')
-        geoidheight_raster = read_geoidheights_raster(session)
+        __GEOIDHEIGHT_RASTER__ = read_geoidheights_raster(session)
 
-    alt_diff_cache[detection.id] = elevation_query(session, detection, elevation_raster, geoidheight_raster)
-    return alt_diff_cache[detection.id]
+    __ALT_DIFF_CACHE__[detection.id] = elevation_query(
+        session, detection, __ELEVATION_RASTER__, __GEOIDHEIGHT_RASTER__)
+    return __ALT_DIFF_CACHE__[detection.id]
 
-def elevation_score (session, detection, sigma):
+
+def elevation_score(session, detection, sigma):
     elevation_diff = get_alt_diff(session, detection)
 
     score = math.exp(-0.5 * (elevation_diff / sigma) ** 2)
     if score < sys.float_info.min:
         return sys.float_info.min
     return score
+
 
 def get_orientation_error(session, detection):
     angle_centerlines = centerline_query(session, detection)
@@ -309,6 +319,7 @@ def get_orientation_error(session, detection):
 
     return diff
 
+
 def orientation_score_continuous(session, detection):
     orientation_error = get_orientation_error(session, detection)
 
@@ -317,6 +328,7 @@ def orientation_score_continuous(session, detection):
     if math.fabs(angle_score) < sys.float_info.min:
         return sys.float_info.min
     return angle_score
+
 
 def orientation_score_discrete(session, detection):
     orientation_error = get_orientation_error(session, detection)
@@ -328,92 +340,92 @@ def orientation_score_discrete(session, detection):
     else:
         return sys.float_info.min
 
-Score = namedtuple('Score', 'name, compute, output')
+__Score__ = namedtuple('__Score__', 'name, compute, output')
 
-Scores = {s.name:s for s in [
-    Score(
+__Scores__ = {s.name: s for s in [
+    __Score__(
         name='prob',
         compute=None,
         output=nyc3dcars.Detection.prob,
     ),
 
-    Score(
+    __Score__(
         name='coverage_score',
         compute=coverage_query,
         output=nyc3dcars.Detection.coverage_score,
     ),
 
-    Score(
+    __Score__(
         name='height_score',
         compute=lambda s, d: elevation_score(s, d, math.sqrt(2.44)),
         output=nyc3dcars.Detection.height_score,
     ),
 
-    Score(
+    __Score__(
         name='height1_score',
         compute=lambda s, d: elevation_score(s, d, 1),
         output=nyc3dcars.Detection.height1_score,
     ),
 
-    Score(
+    __Score__(
         name='height2_score',
         compute=lambda s, d: elevation_score(s, d, 0.5),
         output=nyc3dcars.Detection.height2_score,
     ),
 
-    Score(
+    __Score__(
         name='height3_score',
         compute=lambda s, d: elevation_score(s, d, 5),
         output=nyc3dcars.Detection.height3_score,
     ),
 
-    Score(
+    __Score__(
         name='height4_score',
         compute=lambda s, d: elevation_score(s, d, 10),
         output=nyc3dcars.Detection.height4_score,
     ),
 
-    Score(
+    __Score__(
         name='height5_score',
         compute=lambda s, d: elevation_score(s, d, 20),
         output=nyc3dcars.Detection.height5_score,
     ),
 
-    Score(
+    __Score__(
         name='height6_score',
         compute=lambda s, d: elevation_score(s, d, 50),
         output=nyc3dcars.Detection.height6_score,
     ),
 
-    Score(
+    __Score__(
         name='height7_score',
         compute=lambda s, d: elevation_score(s, d, 100),
         output=nyc3dcars.Detection.height7_score,
     ),
 
-    Score(
+    __Score__(
         name='angle_score',
         compute=orientation_score_continuous,
         output=nyc3dcars.Detection.angle_score,
     ),
 
-    Score(
+    __Score__(
         name='angle2_score',
         compute=orientation_score_discrete,
         output=nyc3dcars.Detection.angle2_score,
     ),
 
-    Score(
+    __Score__(
         name='horizon_score',
         compute=score_horizon,
         output=nyc3dcars.Detection.horizon_score,
     ),
 ]}
 
-Method = namedtuple('Method', 'name, score, inputs, output, display')
+__Method__ = namedtuple('__Method__', 'name, score, inputs, output, display')
 
-Methods = {m.name:m for m in [
-    Method(
+__Methods__ = {m.name: m for m in [
+    __Method__(
         name='reference',
         score=nyc3dcars.Detection.prob,
         inputs=[
@@ -423,9 +435,9 @@ Methods = {m.name:m for m in [
         display=True,
     ),
 
-    Method(
+    __Method__(
         name='coverage',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.coverage_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.coverage_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.coverage_score,
@@ -434,9 +446,9 @@ Methods = {m.name:m for m in [
         display=True,
     ),
 
-    Method(
+    __Method__(
         name='angle',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.angle_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.angle_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.angle_score,
@@ -445,9 +457,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='angle2',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.angle2_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.angle2_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.angle2_score,
@@ -456,9 +468,9 @@ Methods = {m.name:m for m in [
         display=True,
     ),
 
-    Method(
+    __Method__(
         name='height',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -467,9 +479,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='height1',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height1_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height1_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height1_score,
@@ -478,9 +490,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='height2',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height2_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height2_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height2_score,
@@ -489,9 +501,9 @@ Methods = {m.name:m for m in [
         display=True,
     ),
 
-    Method(
+    __Method__(
         name='height3',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height3_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height3_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height3_score,
@@ -500,9 +512,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='height4',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height4_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height4_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height4_score,
@@ -511,9 +523,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='height5',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height5_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height5_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height5_score,
@@ -522,9 +534,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='height6',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height6_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height6_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height6_score,
@@ -532,10 +544,10 @@ Methods = {m.name:m for m in [
         output=nyc3dcars.Detection.height6_nms,
         display=False,
     ),
- 
-    Method(
+
+    __Method__(
         name='height7',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.height7_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height7_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height7_score,
@@ -544,9 +556,10 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='angle_height',
-        score=nyc3dcars.Detection.prob*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle_score)*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
+        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle_score) * func.greatest(
+            math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -556,9 +569,10 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='angle2_height',
-        score=nyc3dcars.Detection.prob*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score)*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
+        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score) * func.greatest(
+            math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -568,9 +582,9 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='horizon',
-        score=nyc3dcars.Detection.prob*nyc3dcars.Detection.horizon_score,
+        score=nyc3dcars.Detection.prob * nyc3dcars.Detection.horizon_score,
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.horizon_score,
@@ -579,9 +593,13 @@ Methods = {m.name:m for m in [
         display=True,
     ),
 
-    Method(
+    __Method__(
         name='all',
-        score=nyc3dcars.Detection.prob*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score)*nyc3dcars.Detection.coverage_score*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score),
+        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score) *
+        nyc3dcars.Detection.coverage_score *
+        func.greatest(
+            math.sqrt(
+                sys.float_info.min), nyc3dcars.Detection.angle2_score),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -592,9 +610,13 @@ Methods = {m.name:m for m in [
         display=False,
     ),
 
-    Method(
+    __Method__(
         name='all2',
-        score=nyc3dcars.Detection.prob*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height2_score)*nyc3dcars.Detection.coverage_score*func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score),
+        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height2_score) *
+        nyc3dcars.Detection.coverage_score *
+        func.greatest(
+            math.sqrt(
+                sys.float_info.min), nyc3dcars.Detection.angle2_score),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height2_score,
