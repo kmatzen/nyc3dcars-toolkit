@@ -4,9 +4,6 @@ import query_utils
 
 import scores
 
-import sys
-import uuid
-import os
 import logging
 import itertools
 import math
