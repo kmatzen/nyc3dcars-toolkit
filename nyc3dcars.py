@@ -10,7 +10,8 @@ import ConfigParser
 
 warnings.simplefilter("ignore", category=sa_exc.SAWarning)
 
-def init ():
+
+def init():
     config = ConfigParser.ConfigParser()
     config.read(os.path.join(os.path.dirname(__file__), 'nyc3dcars.cfg'))
     username = config.get('database', 'username')
@@ -21,7 +22,8 @@ def init ():
     echo = config.getboolean('database', 'echo')
 
     engine = create_engine(
-        'postgresql://%s:%s@%s:%d/%s' % (username, password, host, port, dbname),
+        'postgresql://%s:%s@%s:%d/%s' % (
+            username, password, host, port, dbname),
         echo=echo,
     )
 
@@ -32,57 +34,69 @@ ENGINE = init()
 METADATA = MetaData(ENGINE)
 BASE = declarative_base(metadata=METADATA)
 
+
 class VehicleType(BASE):
     __tablename__ = 'vehicletypes'
-    __table_args__ = {'autoload':True}
+    __table_args__ = {'autoload': True}
     detections = relationship('Detection', backref='type')
     vehicles = relationship('Vehicle', backref='type')
 
+
 class Detection(BASE):
     __tablename__ = 'detections'
-    __table_args__ = {'autoload':True}
+    __table_args__ = {'autoload': True}
+
 
 class Photo(BASE):
     __tablename__ = 'photos'
-    __table_args__ = {'autoload':True, 'extend_existing':True}
+    __table_args__ = {'autoload': True, 'extend_existing': True}
     lla = deferred(Column('lla', Binary))
     geom = deferred(Column('geom', Binary))
     vehicles = relationship('Vehicle', backref='photo')
     detections = relationship('Detection', backref='photo')
 
+
 class Vehicle(BASE):
     __tablename__ = 'vehicles'
-    __table_args__ = {'autoload':True}
+    __table_args__ = {'autoload': True}
+
 
 class Model(BASE):
     __tablename__ = 'models'
-    __table_args__ = {'autoload':True}
+    __table_args__ = {'autoload': True}
     detections = relationship('Detection', backref='model')
+
 
 class OsmLine(BASE):
     __tablename__ = 'planet_osm_line'
     __table_args__ = {'autoload': True}
     osm_id = Column(Integer, primary_key=True)
 
+
 class Footprint(BASE):
     __tablename__ = 'footprints'
     __table_args__ = {'autoload': True}
+
 
 class GeoidHeight(BASE):
     __tablename__ = 'geoidheights'
     __table_args__ = {'autoload': True}
 
+
 class Median(BASE):
     __tablename__ = 'medians'
     __table_args__ = {'autoload': True}
+
 
 class Roadbed(BASE):
     __tablename__ = 'roadbeds'
     __table_args__ = {'autoload': True}
 
+
 class Sidewalk(BASE):
     __tablename__ = 'sidewalks'
     __table_args__ = {'autoload': True}
+
 
 class ElevationRaster(BASE):
     __tablename__ = 'elevation'
