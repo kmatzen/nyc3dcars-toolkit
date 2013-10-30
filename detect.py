@@ -12,7 +12,6 @@ import numpy
 import scipy.misc
 
 from celery.task import task
-from celery.signals import worker_process_init
 
 import pygeo
 
