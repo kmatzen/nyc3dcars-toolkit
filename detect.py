@@ -306,7 +306,7 @@ def detect(pid, model_filename):
 
         pydro_model = pydro.io.LoadModel(model.filename)
         image = scipy.misc.imread(
-            os.path.join(nyc3dcars.photo_dir, photo.filename))
+            os.path.join(nyc3dcars.IMAGE_DIR, photo.filename))
         pyramid = pydro.features.BuildPyramid(
             image, pydro_model.features.sbin, pydro_model.interval,
             pydro_model.features.extra_octave, pydro_model.maxsize[1] + 1, pydro_model.maxsize[0] + 1)
@@ -315,7 +315,7 @@ def detect(pid, model_filename):
 
         # make sure we use at least one entry so we know we tried
         if len(parse_trees) == 0:
-            parse_trees = filtered_model.Parse(-float('inf'), 1)
+            parse_trees = [detection for detections in itertools.islice(filtered_model.Parse(-float('inf'), 1))]
 
         assert len(parse_trees) > 0
 

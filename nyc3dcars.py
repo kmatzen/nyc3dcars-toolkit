@@ -21,15 +21,17 @@ def init():
     port = config.getint('database', 'port')
     echo = config.getboolean('database', 'echo')
 
+    image_dir = config.get('directories', 'image-dir')
+
     engine = create_engine(
         'postgresql://%s:%s@%s:%d/%s' % (
             username, password, host, port, dbname),
         echo=echo,
     )
 
-    return engine
+    return engine, image_dir
 
-ENGINE = init()
+ENGINE, IMAGE_DIR = init()
 
 METADATA = MetaData(ENGINE)
 BASE = declarative_base(metadata=METADATA)
