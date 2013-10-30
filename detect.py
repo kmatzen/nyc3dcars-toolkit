@@ -312,7 +312,7 @@ def detect(pid, model_filename):
             image, pydro_model.features.sbin, pydro_model.interval,
             pydro_model.features.extra_octave, pydro_model.maxsize[1] + 1, pydro_model.maxsize[0] + 1)
         filtered_model = pydro_model.Filter(pyramid)
-        parse_trees = filtered_model.Parse(model.thresh)
+        parse_trees = list(filtered_model.Parse(model.thresh))
 
         # make sure we use at least one entry so we know we tried
         if len(parse_trees) == 0:
