@@ -3,19 +3,18 @@
 import query_utils
 
 # standard imports
-import sys
 import logging
 import argparse
-import math
 
 # nyc3dcars imports
 import nyc3dcars
 
 from celery.task import task
 
-from sqlalchemy import *
+from sqlalchemy import func, or_, desc
 
 import scores
+
 
 @task
 def nms(pid, model, method):
@@ -24,7 +23,7 @@ def nms(pid, model, method):
     try:
         session = nyc3dcars.Session()
 
-        scoring_method = scores.Methods[method]
+        scoring_method = scores.__Methods__[method]
 
         set_nms = str(scoring_method.output).split('.')[-1]
 
@@ -40,7 +39,7 @@ def nms(pid, model, method):
             .one()
 
         if todo > 0:
-            raise Exception ('Some input was not yet computed')
+            raise Exception('Some input was not yet computed')
 
         pos = 0
         while True:
@@ -74,15 +73,15 @@ def nms(pid, model, method):
 
             for elt in blacklist:
                 setattr(elt, set_nms, False)
-                
+
             pos += 1
 
         session.commit()
 
         return pid
-    except Exception, exc:
+    except Exception:
         session.rollback()
-        raise nms
+        raise
     finally:
         session.close()
 
@@ -91,7 +90,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pid', type=int, required=True)
     parser.add_argument('--model', required=True)
-    parser.add_argument('--method', choices=scores.Methods.keys(), required=True)
+    parser.add_argument(
+        '--method', choices=scores.__Methods__.keys(), required=True)
     args = parser.parse_args()
 
     nms(**vars(args))
