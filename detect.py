@@ -315,7 +315,7 @@ def detect(pid, model_filename):
 
         # make sure we use at least one entry so we know we tried
         if len(parse_trees) == 0:
-            parse_trees = [detection for detections in itertools.islice(filtered_model.Parse(-float('inf'), 1))]
+            parse_trees = [detection for detections in itertools.islice(filtered_model.Parse(-numpy.inf), 1)]
 
         assert len(parse_trees) > 0
 

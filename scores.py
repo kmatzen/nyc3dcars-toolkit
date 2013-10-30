@@ -342,7 +342,7 @@ def orientation_score_discrete(session, detection):
 
 SCORE = namedtuple('SCORE', 'name, compute, output')
 
-SCORES = {s.name: s for s in [
+__Scores__ = [
     SCORE(
         name='prob',
         compute=None,
@@ -420,11 +420,13 @@ SCORES = {s.name: s for s in [
         compute=score_horizon,
         output=nyc3dcars.Detection.horizon_score,
     ),
-]}
+]
+
+SCORES = {s.name: s for s in __Scores__}
 
 METHOD = namedtuple('METHOD', 'name, score, inputs, output, display')
 
-METHODS = {m.name: m for m in [
+__Methods__ = [
     METHOD(
         name='reference',
         score=nyc3dcars.Detection.prob,
@@ -626,4 +628,6 @@ METHODS = {m.name: m for m in [
         output=nyc3dcars.Detection.all2_nms,
         display=True,
     ),
-]}
+]
+
+METHODS = {m.name: m for m in __Methods__}
