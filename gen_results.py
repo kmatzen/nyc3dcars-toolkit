@@ -13,6 +13,7 @@ import nyc3dcars
 import argparse
 from sqlalchemy import desc, func, and_
 
+
 def match(labels):
     true_positive = []
     covered = []
@@ -27,6 +28,7 @@ def match(labels):
         covered += [label.vid]
         selected += [label]
     return selected
+
 
 def get_detections(session, score, query_filters, model):
     detections = session.query(
@@ -43,8 +45,10 @@ def get_detections(session, score, query_filters, model):
 
 
 def precision_recall_threshold(labels, detections, threshold):
-    thresholded_labels = [label for label in labels if label.score >= threshold]
-    thresholded_detections = [detection for detection in detections if detection.score >= threshold]
+    thresholded_labels = [
+        label for label in labels if label.score >= threshold]
+    thresholded_detections = [
+        detection for detection in detections if detection.score >= threshold]
 
     num_detections = len(thresholded_detections)
 
@@ -54,8 +58,10 @@ def precision_recall_threshold(labels, detections, threshold):
 
 
 def orientation_similarity_threshold(labels, detections, threshold):
-    thresholded_labels = [label for label in labels if label.score >= threshold]
-    thresholded_detections = [detection for detection in detections if detection.score >= threshold]
+    thresholded_labels = [
+        label for label in labels if label.score >= threshold]
+    thresholded_detections = [
+        detection for detection in detections if detection.score >= threshold]
 
     num_detections = len(thresholded_detections)
 
@@ -123,12 +129,14 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
 
     thresholds_linear = [1 - i / 499.0 for i in xrange(500)]
     step = (high - low) / 500.0
-    thresholds_sigmoid = [1.0 / (1.0 + math.exp(model.a * (step * i + low) + model.b)) for i in xrange(500)]
+    thresholds_sigmoid = [1.0 / (1.0 + math.exp(model.a * (step * i + low) + model.b))
+                          for i in xrange(500)]
 
     thresholds = thresholds_linear + thresholds_sigmoid
     thresholds.sort(key=lambda k: -k)
 
-    thresholded = [precision_recall_threshold(labels, detections, threshold) for threshold in thresholds]
+    thresholded = [precision_recall_threshold(labels, detections, threshold)
+                   for threshold in thresholds]
 
     return numpy.array([(float(tp) / num_detections if num_detections > 0 else 1, float(tp) / num_vehicles if num_vehicles > 0 else 1) for tp, num_detections in thresholded])
 
@@ -144,7 +152,8 @@ def orientation_similarity(session, score, detection_filters, vehicle_filters, m
         nyc3dcars.Detection.id.label('did'),
         (-nyc3dcars.Vehicle.theta / 180 * math.pi + math.pi).label('gt'),
         (nyc3dcars.Detection.world_angle).label('d'),
-        ((1 + func.cos(-nyc3dcars.Vehicle.theta / 180 * math.pi + math.pi - nyc3dcars.Detection.world_angle))/ 2).label('orientation_similarity'),
+        ((1 + func.cos(-nyc3dcars.Vehicle.theta / 180 * math.pi + math.pi - nyc3dcars.Detection.world_angle))
+         / 2).label('orientation_similarity'),
         score.label('score')) \
         .select_from(nyc3dcars.Detection) \
         .join(nyc3dcars.Photo) \
@@ -183,7 +192,8 @@ def orientation_similarity(session, score, detection_filters, vehicle_filters, m
 
     thresholds_linear = [1 - i / 499.0 for i in xrange(500)]
     step = (high - low) / 500.0
-    thresholds_sigmoid = [1.0 / (1.0 + math.exp(model.a * (step * i + low) + model.b)) for i in xrange(500)]
+    thresholds_sigmoid = [1.0 / (1.0 + math.exp(model.a * (step * i + low) + model.b))
+                          for i in xrange(500)]
 
     thresholds = thresholds_linear + thresholds_sigmoid
     thresholds.sort(key=lambda k: -k)
@@ -235,7 +245,8 @@ def gen_results(model, methods, aos, dataset_id):
                 .filter(nms_method.output == None) \
                 .one()
             if todo > 0:
-                logging.info('%s is not ready.  %d %s NMS remaining' % (model, todo, name))
+                logging.info(
+                    '%s is not ready.  %d %s NMS remaining' % (model, todo, name))
                 not_ready = True
 
         if not_ready:
@@ -247,22 +258,28 @@ def gen_results(model, methods, aos, dataset_id):
             for method in methods:
                 nms_method = scores.METHODS[method]
                 selected = [nms_method.output == True]
-                logging.info('%s daynight: %s, difficulty: %s, method: %s' % (model, daynight, difficulty, method))
-                points = precision_recall(session, nms_method.score, dataset_id + daynights[daynight] + selected, dataset_id + daynights[daynight] + difficulties[difficulty], model)
+                logging.info('%s daynight: %s, difficulty: %s, method: %s' %
+                             (model, daynight, difficulty, method))
+                points = precision_recall(session, nms_method.score, dataset_id + daynights[
+                                          daynight] + selected, dataset_id + daynights[daynight] + difficulties[difficulty], model)
                 name = '%s, %s' % (model, method)
                 if aos:
-                    points_aos = orientation_similarity(session, nms_method.score, dataset_id + daynights[daynight] + selected, dataset_id + daynights[daynight] + difficulties[difficulty], model)
+                    points_aos = orientation_similarity(session, nms_method.score, dataset_id + daynights[
+                                                        daynight] + selected, dataset_id + daynights[daynight] + difficulties[difficulty], model)
                 else:
                     points_aos = None
 
                 print(points.shape)
                 print(scipy.integrate.trapz(points[:, 0], points[:, 1]))
-                filename = '%s-%s-%s-%s-pr.txt' % (model, daynight, difficulty, method)
+                filename = '%s-%s-%s-%s-pr.txt' % (
+                    model, daynight, difficulty, method)
                 print(filename)
                 numpy.savetxt(filename, points)
                 if points_aos is not None:
-                    print(scipy.integrate.trapz(points_aos[:, 0], points_aos[:, 1]))
-                    filename = '%s-%s-%s-%s-aos.txt' % (model, daynight, difficulty, method)
+                    print(scipy.integrate.trapz(
+                        points_aos[:, 0], points_aos[:, 1]))
+                    filename = '%s-%s-%s-%s-aos.txt' % (
+                        model, daynight, difficulty, method)
                     print(filename)
                     numpy.savetxt(filename, points_aos)
 
