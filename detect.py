@@ -281,7 +281,7 @@ def detect(pid, model_filename):
     logger = logging.getLogger('detect')
     logger.info((pid, model_filename))
 
-    session = nyc3dcars.Session()
+    session = nyc3dcars.SESSION()
     try:
         num_detections, = session.query(func.count(nyc3dcars.Detection.id)) \
             .join(nyc3dcars.Model) \

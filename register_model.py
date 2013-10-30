@@ -8,7 +8,7 @@ import nyc3dcars
 import pydro.io
 
 def register_model (filename, a, b, thresh, viewpoint):
-    session = nyc3dcars.Session()
+    session = nyc3dcars.SESSION()
 
     if viewpoint:
         model = pydro.io.LoadModel(filename)

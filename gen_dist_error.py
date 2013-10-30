@@ -157,7 +157,7 @@ def get_labels(session, score, detection_filters, vehicle_filters, model, voc_th
 
 def gen_results(model, methods, dataset_id):
     try:
-        session = nyc3dcars.Session()
+        session = nyc3dcars.SESSION()
 
         model_id, = session.query(nyc3dcars.Model.id) \
             .filter(nyc3dcars.Model.filename == model) \

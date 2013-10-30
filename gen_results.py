@@ -196,7 +196,7 @@ def orientation_similarity(session, score, detection_filters, vehicle_filters, m
 
 def gen_results(model, methods, aos, dataset_id):
     try:
-        session = nyc3dcars.Session()
+        session = nyc3dcars.SESSION()
 
         difficulties = {
             'full': []
@@ -225,7 +225,7 @@ def gen_results(model, methods, aos, dataset_id):
         not_ready = False
 
         for name in methods:
-            nms_method = scores.__Methods__[name]
+            nms_method = scores.METHODS[name]
             todo, = session.query(func.count(nyc3dcars.Detection.id)) \
                 .join(nyc3dcars.Model) \
                 .join(nyc3dcars.Photo) \
@@ -245,7 +245,7 @@ def gen_results(model, methods, aos, dataset_id):
 
         for daynight, difficulty in itertools.product(daynights, difficulties):
             for method in methods:
-                nms_method = scores.__Methods__[method]
+                nms_method = scores.METHODS[method]
                 selected = [nms_method.output == True]
                 logging.info('%s daynight: %s, difficulty: %s, method: %s' % (model, daynight, difficulty, method))
                 points = precision_recall(session, nms_method.score, dataset_id + daynights[daynight] + selected, dataset_id + daynights[daynight] + difficulties[difficulty], model)
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', required=True)
     parser.add_argument('--aos', action='store_true')
     parser.add_argument('--dataset-id', required=True, type=int)
-    parser.add_argument('--methods', nargs='+', default=scores.__Methods__.keys())
+    parser.add_argument('--methods', nargs='+', default=scores.METHODS.keys())
     args = parser.parse_args()
 
     gen_results(**vars(args))

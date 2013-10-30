@@ -21,9 +21,9 @@ def nms(pid, model, method):
     logging.info((pid))
 
     try:
-        session = nyc3dcars.Session()
+        session = nyc3dcars.SESSION()
 
-        scoring_method = scores.__Methods__[method]
+        scoring_method = scores.METHODS[method]
 
         set_nms = str(scoring_method.output).split('.')[-1]
 
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--pid', type=int, required=True)
     parser.add_argument('--model', required=True)
     parser.add_argument(
-        '--method', choices=scores.__Methods__.keys(), required=True)
+        '--method', choices=scores.METHODS.keys(), required=True)
     args = parser.parse_args()
 
     nms(**vars(args))

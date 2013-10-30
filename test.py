@@ -24,7 +24,7 @@ def flatten(task):
             return [task.task_id] + parent
 
 def test(model, remote, methods, dataset_id):
-    session = nyc3dcars.Session()
+    session = nyc3dcars.SESSION()
     try:
         test_set = session.query(nyc3dcars.Photo) \
             .filter(nyc3dcars.Photo.test == True) \

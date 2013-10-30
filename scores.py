@@ -340,92 +340,92 @@ def orientation_score_discrete(session, detection):
     else:
         return sys.float_info.min
 
-__Score__ = namedtuple('__Score__', 'name, compute, output')
+SCORE = namedtuple('SCORE', 'name, compute, output')
 
-__Scores__ = {s.name: s for s in [
-    __Score__(
+SCORES = {s.name: s for s in [
+    SCORE(
         name='prob',
         compute=None,
         output=nyc3dcars.Detection.prob,
     ),
 
-    __Score__(
+    SCORE(
         name='coverage_score',
         compute=coverage_query,
         output=nyc3dcars.Detection.coverage_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height_score',
         compute=lambda s, d: elevation_score(s, d, math.sqrt(2.44)),
         output=nyc3dcars.Detection.height_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height1_score',
         compute=lambda s, d: elevation_score(s, d, 1),
         output=nyc3dcars.Detection.height1_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height2_score',
         compute=lambda s, d: elevation_score(s, d, 0.5),
         output=nyc3dcars.Detection.height2_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height3_score',
         compute=lambda s, d: elevation_score(s, d, 5),
         output=nyc3dcars.Detection.height3_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height4_score',
         compute=lambda s, d: elevation_score(s, d, 10),
         output=nyc3dcars.Detection.height4_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height5_score',
         compute=lambda s, d: elevation_score(s, d, 20),
         output=nyc3dcars.Detection.height5_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height6_score',
         compute=lambda s, d: elevation_score(s, d, 50),
         output=nyc3dcars.Detection.height6_score,
     ),
 
-    __Score__(
+    SCORE(
         name='height7_score',
         compute=lambda s, d: elevation_score(s, d, 100),
         output=nyc3dcars.Detection.height7_score,
     ),
 
-    __Score__(
+    SCORE(
         name='angle_score',
         compute=orientation_score_continuous,
         output=nyc3dcars.Detection.angle_score,
     ),
 
-    __Score__(
+    SCORE(
         name='angle2_score',
         compute=orientation_score_discrete,
         output=nyc3dcars.Detection.angle2_score,
     ),
 
-    __Score__(
+    SCORE(
         name='horizon_score',
         compute=score_horizon,
         output=nyc3dcars.Detection.horizon_score,
     ),
 ]}
 
-__Method__ = namedtuple('__Method__', 'name, score, inputs, output, display')
+METHOD = namedtuple('METHOD', 'name, score, inputs, output, display')
 
-__Methods__ = {m.name: m for m in [
-    __Method__(
+METHODS = {m.name: m for m in [
+    METHOD(
         name='reference',
         score=nyc3dcars.Detection.prob,
         inputs=[
@@ -435,7 +435,7 @@ __Methods__ = {m.name: m for m in [
         display=True,
     ),
 
-    __Method__(
+    METHOD(
         name='coverage',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.coverage_score,
         inputs=[
@@ -446,7 +446,7 @@ __Methods__ = {m.name: m for m in [
         display=True,
     ),
 
-    __Method__(
+    METHOD(
         name='angle',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.angle_score,
         inputs=[
@@ -457,7 +457,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='angle2',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.angle2_score,
         inputs=[
@@ -468,7 +468,7 @@ __Methods__ = {m.name: m for m in [
         display=True,
     ),
 
-    __Method__(
+    METHOD(
         name='height',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height_score,
         inputs=[
@@ -479,7 +479,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height1',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height1_score,
         inputs=[
@@ -490,7 +490,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height2',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height2_score,
         inputs=[
@@ -501,7 +501,7 @@ __Methods__ = {m.name: m for m in [
         display=True,
     ),
 
-    __Method__(
+    METHOD(
         name='height3',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height3_score,
         inputs=[
@@ -512,7 +512,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height4',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height4_score,
         inputs=[
@@ -523,7 +523,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height5',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height5_score,
         inputs=[
@@ -534,7 +534,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height6',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height6_score,
         inputs=[
@@ -545,7 +545,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='height7',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.height7_score,
         inputs=[
@@ -556,7 +556,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='angle_height',
         score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle_score) * func.greatest(
             math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
@@ -569,7 +569,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='angle2_height',
         score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score) * func.greatest(
             math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
@@ -582,7 +582,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='horizon',
         score=nyc3dcars.Detection.prob * nyc3dcars.Detection.horizon_score,
         inputs=[
@@ -593,7 +593,7 @@ __Methods__ = {m.name: m for m in [
         display=True,
     ),
 
-    __Method__(
+    METHOD(
         name='all',
         score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score) *
         nyc3dcars.Detection.coverage_score *
@@ -610,7 +610,7 @@ __Methods__ = {m.name: m for m in [
         display=False,
     ),
 
-    __Method__(
+    METHOD(
         name='all2',
         score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height2_score) *
         nyc3dcars.Detection.coverage_score *

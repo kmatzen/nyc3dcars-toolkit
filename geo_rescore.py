@@ -22,7 +22,7 @@ from sqlalchemy import func, or_
 @task
 def geo_rescore(pid, model, method):
     logging.info('geo_rescore %d %s %s' % (pid, model, method))
-    session = nyc3dcars.Session()
+    session = nyc3dcars.SESSION()
     try:
         numpy.seterr(all='raise')
 
@@ -30,7 +30,7 @@ def geo_rescore(pid, model, method):
             .filter(nyc3dcars.Model.filename == model) \
             .one()
 
-        nms_method = scores.__Methods__[method]
+        nms_method = scores.METHODS[method]
 
         detections = session.query(nyc3dcars.Detection) \
             .join(nyc3dcars.Model) \
@@ -38,11 +38,11 @@ def geo_rescore(pid, model, method):
             .filter(nyc3dcars.Model.filename == model) \
             .filter(or_(*[m == None for m in nms_method.inputs]))
 
-        nms_method = scores.__Methods__[method]
+        nms_method = scores.METHODS[method]
 
         for method_input in nms_method.inputs:
             score_name = str(method_input).split('.')[-1]
-            score = scores.__Scores__[score_name]
+            score = scores.SCORES[score_name]
 
             if score.compute is None:
                 continue
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     parser.add_argument('--pid', type=int, required=True)
     parser.add_argument('--model', required=True)
     parser.add_argument(
-        '--method', required=True, choices=scores.__Methods__.keys())
+        '--method', required=True, choices=scores.METHODS.keys())
     args = parser.parse_args()
 
     geo_rescore(**vars(args))
