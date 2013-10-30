@@ -119,7 +119,7 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
     thresholds = thresholds_linear + thresholds_sigmoid
     thresholds.sort(key=lambda k: -k)
 
-    thresholded = [precision_recall_threshold(session, labels, detections, threshold)
+    thresholded = [precision_recall_threshold(labels, detections, threshold)
                    for threshold in thresholds]
 
     return numpy.array([(float(tp) / num_detections if num_detections > 0 else 1, float(tp) / num_vehicles if num_vehicles > 0 else 1, threshold) for tp, num_detections, threshold in thresholded])
