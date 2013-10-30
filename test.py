@@ -9,19 +9,21 @@ import scores
 import logging
 import argparse
 
-from detect import *
-from geo_rescore import *
-from nms import *
+from detect import detect
+from geo_rescore import geo_rescore
+from nms import nms
+
 
 def flatten(task):
     if task is None:
-        return None 
+        return None
     else:
         parent = flatten(task.parent)
         if parent is None:
             return [task.task_id]
         else:
             return [task.task_id] + parent
+
 
 def test(model, remote, methods, dataset_id):
     session = nyc3dcars.SESSION()
@@ -35,7 +37,7 @@ def test(model, remote, methods, dataset_id):
             .one()
 
         for photo in test_set:
-            logging.info('PID: %d'%photo.id)
+            logging.info('PID: %d' % photo.id)
 
             celery_list = [detect.s(photo.id, model)]
 
@@ -45,11 +47,10 @@ def test(model, remote, methods, dataset_id):
             for method in methods:
                 celery_list += [nms.s(model, method)]
 
-
             celery_task = celery.chain(celery_list)
 
             if remote:
-                task_handle = celery_task.apply_async()
+                celery_task.apply_async()
             else:
                 celery_task.apply()
 
@@ -65,7 +66,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', required=True)
-    parser.add_argument('--methods', nargs='+', default=scores.Methods.keys())
+    parser.add_argument('--methods', nargs='+', default=scores.METHODS.keys())
     parser.add_argument('--dataset-id', required=True, type=int)
     parser.add_argument('--remote', action='store_true')
     args = parser.parse_args()
