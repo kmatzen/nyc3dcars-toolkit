@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+"""Contains task to perform geographic rescoring of detections."""
+
 import scores
 
 # standard imports
@@ -15,28 +17,31 @@ import numpy
 
 from celery.task import task
 
-from sqlalchemy import func, or_
-#from sqlalchemy.orm import *
+from sqlalchemy import or_
 
 
 @task
 def geo_rescore(pid, model, method):
-    logging.info('geo_rescore %d %s %s' % (pid, model, method))
+    """Apply geographic rescoring."""
+
+    logging.info(str((pid, model, method)))
     session = nyc3dcars.SESSION()
     try:
         numpy.seterr(all='raise')
 
         session.query(nyc3dcars.Model) \
-            .filter(nyc3dcars.Model.filename == model) \
+            .filter_by(filename=model) \
             .one()
 
         nms_method = scores.METHODS[method]
 
+        # pylint: disable-msg=E1101
         detections = session.query(nyc3dcars.Detection) \
             .join(nyc3dcars.Model) \
             .filter(nyc3dcars.Detection.pid == pid) \
             .filter(nyc3dcars.Model.filename == model) \
             .filter(or_(*[m == None for m in nms_method.inputs]))
+        # pylint: enable-msg=E1101
 
         nms_method = scores.METHODS[method]
 
@@ -54,8 +59,6 @@ def geo_rescore(pid, model, method):
 
                 if existing is not None:
                     if not math.fabs(existing - value) < 1e-8:
-                        logging.info(
-                            '%s %f %f' % (score_name, existing, value))
                         assert False
 
                 setattr(detection, score_name, value)
@@ -71,11 +74,18 @@ def geo_rescore(pid, model, method):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--pid', type=int, required=True)
-    parser.add_argument('--model', required=True)
-    parser.add_argument(
-        '--method', required=True, choices=scores.METHODS.keys())
-    args = parser.parse_args()
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument('--pid', type=int, required=True)
+    PARSER.add_argument('--model', required=True)
+    PARSER.add_argument(
+        '--method',
+        required=True,
+        choices=scores.METHODS.keys()
+    )
+    ARGS = PARSER.parse_args()
 
-    geo_rescore(**vars(args))
+    geo_rescore(
+        pid=ARGS.pid,
+        model=ARGS.model,
+        method=ARGS.method,
+    )
