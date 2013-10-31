@@ -1,3 +1,8 @@
+# pylint: disable=W0232,R0903
+# Most of these classes are fine as-is since sqlalchemy will modify them.
+
+"""Manages access to nyc3dcars database."""
+
 import warnings
 from sqlalchemy import exc as sa_exc
 
@@ -10,46 +15,54 @@ import ConfigParser
 
 warnings.simplefilter("ignore", category=sa_exc.SAWarning)
 
+__config__ = ConfigParser.ConfigParser()
+__config__.read(os.path.join(os.path.dirname(__file__), 'nyc3dcars.cfg'))
+__username__ = __config__.get('database', 'username')
+__password__ = __config__.get('database', 'password')
+__dbname__ = __config__.get('database', 'name')
+__host__ = __config__.get('database', 'host')
+__port__ = __config__.getint('database', 'port')
+__echo__ = __config__.getboolean('database', 'echo')
 
-def init():
-    config = ConfigParser.ConfigParser()
-    config.read(os.path.join(os.path.dirname(__file__), 'nyc3dcars.cfg'))
-    username = config.get('database', 'username')
-    password = config.get('database', 'password')
-    dbname, = config.get('database', 'name'),
-    host, = config.get('database', 'host'),
-    port = config.getint('database', 'port')
-    echo = config.getboolean('database', 'echo')
+IMAGE_DIR = __config__.get('directories', 'image-dir')
 
-    image_dir = config.get('directories', 'image-dir')
+__engine__ = create_engine(
+    'postgresql://%s:%s@%s:%d/%s' % (
+        __username__,
+        __password__,
+        __host__,
+        __port__,
+        __dbname__
+    ),
+    echo=__echo__,
+)
 
-    engine = create_engine(
-        'postgresql://%s:%s@%s:%d/%s' % (
-            username, password, host, port, dbname),
-        echo=echo,
-    )
-
-    return engine, image_dir
-
-ENGINE, IMAGE_DIR = init()
-
-METADATA = MetaData(ENGINE)
-BASE = declarative_base(metadata=METADATA)
+__metadata__ = MetaData(__engine__)
+__Base__ = declarative_base(metadata=__metadata__)
 
 
-class VehicleType(BASE):
+class VehicleType(__Base__):
+
+    """Sedan, minivan, etc."""
+
     __tablename__ = 'vehicletypes'
     __table_args__ = {'autoload': True}
     detections = relationship('Detection', backref='type')
     vehicles = relationship('Vehicle', backref='type')
 
 
-class Detection(BASE):
+class Detection(__Base__):
+
+    """DPM detection result."""
+
     __tablename__ = 'detections'
     __table_args__ = {'autoload': True}
 
 
-class Photo(BASE):
+class Photo(__Base__):
+
+    """Photograph along with geo-location data."""
+
     __tablename__ = 'photos'
     __table_args__ = {'autoload': True, 'extend_existing': True}
     lla = deferred(Column('lla', Binary))
@@ -58,52 +71,78 @@ class Photo(BASE):
     detections = relationship('Detection', backref='photo')
 
 
-class Vehicle(BASE):
+class Vehicle(__Base__):
+
+    """Ground truth vehicle annotation."""
+
     __tablename__ = 'vehicles'
     __table_args__ = {'autoload': True}
 
 
-class Model(BASE):
+class Model(__Base__):
+
+    """Registered DPM model."""
+
     __tablename__ = 'models'
     __table_args__ = {'autoload': True}
     detections = relationship('Detection', backref='model')
 
 
-class OsmLine(BASE):
+class OsmLine(__Base__):
+
+    """OpenStreetMap polylines.  Roads, railways, etc."""
+
     __tablename__ = 'planet_osm_line'
     __table_args__ = {'autoload': True}
     osm_id = Column(Integer, primary_key=True)
 
 
-class Footprint(BASE):
+class Footprint(__Base__):
+
+    """Building footprints from OpenData."""
+
     __tablename__ = 'footprints'
     __table_args__ = {'autoload': True}
 
 
-class GeoidHeight(BASE):
+class GeoidHeight(__Base__):
+
+    """Distance used to turn ellipsoid height into orthometric height."""
+
     __tablename__ = 'geoidheights'
     __table_args__ = {'autoload': True}
 
 
-class Median(BASE):
+class Median(__Base__):
+
+    """Road medians from OpenData."""
+
     __tablename__ = 'medians'
     __table_args__ = {'autoload': True}
 
 
-class Roadbed(BASE):
+class Roadbed(__Base__):
+
+    """Roadbed polygons from OpenData."""
+
     __tablename__ = 'roadbeds'
     __table_args__ = {'autoload': True}
 
 
-class Sidewalk(BASE):
+class Sidewalk(__Base__):
+
+    """Sidewalk polygons from OpenData."""
+
     __tablename__ = 'sidewalks'
     __table_args__ = {'autoload': True}
 
 
-class ElevationRaster(BASE):
+class ElevationRaster(__Base__):
+
+    """Terrain elevation raster from USGS."""
+
     __tablename__ = 'elevation'
     __table_args__ = {'autoload': True}
 
-BASE.metadata.create_all(ENGINE)
-SESSION = scoped_session(sessionmaker(bind=ENGINE))
-
+__Base__.metadata.create_all(__engine__)
+SESSION = scoped_session(sessionmaker(bind=__engine__))
