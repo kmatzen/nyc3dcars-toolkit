@@ -20,4 +20,4 @@ ADMINS = [('Kevin James Matzen', 'kmatzen@gmail.com')]
 
 CELERY_RESULT_SERIALIZER = 'json'
 
-CELERYD_MAX_TASKS_PER_CHILD = 1
+#CELERYD_MAX_TASKS_PER_CHILD = 1
