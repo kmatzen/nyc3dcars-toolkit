@@ -5,6 +5,7 @@ import nyc3dcars
 import math
 import numpy
 
+
 def overlap(geom_a, geom_b):
     """Computes the overlap between two bounding boxes."""
 
@@ -19,7 +20,7 @@ def overlap(geom_a, geom_b):
 
 def overlap_asym(geom_a, geom_b):
     """Computes an asymmetric overlap between two bounding boxes."""
-    
+
     intersection_score = intersection(geom_a, geom_b)
     area2 = (geom_b.y2 - geom_b.y1) * (geom_b.x2 - geom_b.x1)
     overlap_score = intersection_score / area2
@@ -30,10 +31,12 @@ def overlap_asym(geom_a, geom_b):
 def intersection(geom_a, geom_b):
     """Computes the interesction of two bounding boxes."""
 
-    intersection_score = func.greatest(0, (func.least(geom_a.x2, geom_b.x2) -
-                                           func.greatest(geom_a.x1, geom_b.x1))) * \
-        func.greatest(0, (func.least(geom_a.y2, geom_b.y2) -
-                          func.greatest(geom_a.y1, geom_b.y1)))
+    intersection_score = func.greatest(0,
+                                       (func.least(geom_a.x2, geom_b.x2) -
+                                        func.greatest(geom_a.x1, geom_b.x1))) * \
+        func.greatest(0,
+                      (func.least(geom_a.y2, geom_b.y2) -
+                       func.greatest(geom_a.y1, geom_b.y1)))
 
     return intersection_score
 
@@ -47,6 +50,7 @@ def union(geom_a, geom_b):
     union_score = area1 + area2 - intersection_score
 
     return union_score
+
 
 def match(labels):
     """Computes matching between detections and annotations."""
@@ -65,6 +69,7 @@ def match(labels):
         selected += [label]
     return selected
 
+
 def get_detections(session, score, query_filters, model):
     """Selects all detections that satisfy query filters."""
 
@@ -82,6 +87,7 @@ def get_detections(session, score, query_filters, model):
 
     return detections.all()
 
+
 def precision_recall_threshold(labels, detections, threshold):
     """Computes precision and recall for particular threshold."""
 
@@ -95,6 +101,7 @@ def precision_recall_threshold(labels, detections, threshold):
     selected = match(thresholded_labels)
 
     return len(selected), num_detections, threshold
+
 
 def get_num_vehicles(session, query_filters):
     """Gets the total number of annotations."""
@@ -112,7 +119,8 @@ def get_num_vehicles(session, query_filters):
     num_vehicles, = num_vehicles_query.one()
     return num_vehicles
 
-def orientation_similarity_threshold(labels, detections, threshold):
+
+def orientation_sim_threshold(labels, detections, threshold):
     """Computes orientation similarity and recall for particular threshold."""
 
     thresholded_labels = [
@@ -125,6 +133,7 @@ def orientation_similarity_threshold(labels, detections, threshold):
     selected = match(thresholded_labels)
 
     return sum(s.orientation_similarity for s in selected), len(selected), num_detections
+
 
 def precision_recall(session, score, detection_filters, vehicle_filters, model):
     """Computes precision-recall curve."""
@@ -192,8 +201,9 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
 
     return numpy.array([(
         float(tp) / num_detections if num_detections > 0 else 1,
-        float(tp) / num_vehicles if num_vehicles > 0 else 1
-    ) for tp, num_detections in thresholded])
+        float(tp) / num_vehicles if num_vehicles > 0 else 1,
+        threshold,
+    ) for tp, num_detections, threshold in thresholded])
 
 
 def orientation_similarity(session, score, detection_filters,
@@ -262,12 +272,10 @@ def orientation_similarity(session, score, detection_filters,
     thresholds = thresholds_linear + thresholds_sigmoid
     thresholds.sort(key=lambda k: -k)
 
-    thresholded = [orientation_similarity_threshold(
+    thresholded = [orientation_sim_threshold(
         labels, detections, threshold) for threshold in thresholds]
 
     return numpy.array([(
         aos / num_detections if num_detections > 0 else 1,
         float(tp) / num_vehicles if num_vehicles > 0 else 1
     ) for aos, tp, num_detections in thresholded])
-
-
