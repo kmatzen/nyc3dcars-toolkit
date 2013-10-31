@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+"""Runs the testing protocol for a given dataset, model, and NMS methods.
+   Can either run as a single process or distributed using celery."""
+
 import celery
 
 import nyc3dcars
@@ -14,30 +17,20 @@ from geo_rescore import geo_rescore
 from nms import nms
 
 
-def flatten(task):
-    if task is None:
-        return None
-    else:
-        parent = flatten(task.parent)
-        if parent is None:
-            return [task.task_id]
-        else:
-            return [task.task_id] + parent
-
-
 def test(model, remote, methods, dataset_id):
+    """Executes the testing protocol."""
+
     session = nyc3dcars.SESSION()
     try:
         test_set = session.query(nyc3dcars.Photo) \
-            .filter(nyc3dcars.Photo.test == True) \
-            .filter(nyc3dcars.Photo.dataset_id == dataset_id) \
+            .filter_by(test=True, dataset_id=dataset_id)
 
         session.query(nyc3dcars.Model) \
             .filter_by(filename=model) \
             .one()
 
         for photo in test_set:
-            logging.info('PID: %d' % photo.id)
+            logging.info(photo.id)
 
             celery_list = [detect.s(photo.id, model)]
 
@@ -64,11 +57,16 @@ def test(model, remote, methods, dataset_id):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', required=True)
-    parser.add_argument('--methods', nargs='+', default=scores.METHODS.keys())
-    parser.add_argument('--dataset-id', required=True, type=int)
-    parser.add_argument('--remote', action='store_true')
-    args = parser.parse_args()
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument('--model', required=True)
+    PARSER.add_argument('--methods', nargs='+', default=scores.METHODS.keys())
+    PARSER.add_argument('--dataset-id', required=True, type=int)
+    PARSER.add_argument('--remote', action='store_true')
+    ARGS = PARSER.parse_args()
 
-    test(**vars(args))
+    test(
+        model=ARGS.model,
+        remote=ARGS.remote,
+        methods=ARGS.methods,
+        dataset_id=ARGS.dataset_id,
+    )
