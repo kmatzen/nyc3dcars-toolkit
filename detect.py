@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
+"""Computes the raw detections using the DPM.
+   Additionally, estimates 3D pose for each detection."""
+
 import itertools
 import os
 import argparse
 import logging
 import math
+from collections import namedtuple
 
 import nyc3dcars
 from sqlalchemy import func
@@ -21,6 +25,8 @@ import pydro.features
 
 
 def in_range(val, low, high):
+    """Checks if angle is within a certain range."""
+
     low -= 1e-5
     high += 1e-5
 
@@ -39,12 +45,14 @@ def in_range(val, low, high):
     return val < high
 
 
-def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
-    logger = logging.getLogger('detect.compute_car_pose')
-    R = numpy.array([[photo.r11, photo.r12, photo.r13],
-                     [photo.r21, photo.r22, photo.r23],
-                     [photo.r31, photo.r32, photo.r33]])
-    m = -R.T.dot([[photo.t1], [photo.t2], [photo.t3]])
+def compute_car_pose(photo, bbox, angle, types):
+    """Compute 3D pose for 2D bounding box."""
+
+    camera_rotation = numpy.array([[photo.r11, photo.r12, photo.r13],
+                                   [photo.r21, photo.r22, photo.r23],
+                                   [photo.r31, photo.r32, photo.r33]])
+    camera_position = - \
+        camera_rotation.T.dot([[photo.t1], [photo.t2], [photo.t3]])
 
     """
      select KM_Scale(
@@ -54,18 +62,18 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
             ST_MakePoint(-74.0064, 40.7142), 4326)),
             KM_Point3D(0,0,1), false), -0.7583);
     """
-    m[0] += -0.158366558899042248
-    m[1] += 0.552522748735624458
-    m[2] += -0.494628684117799755
+    camera_position[0] += -0.158366558899042248
+    camera_position[1] += 0.552522748735624458
+    camera_position[2] += -0.494628684117799755
 
     vehicle_height = 1.445
 
     det_focal = photo.focal
     det_height = photo.height
     det_width = photo.width
-    det_bottom = y2 * det_height
-    det_top = y1 * det_height
-    det_middle = (x1 + x2) / 2 * det_width
+    det_bottom = bbox.y2 * det_height
+    det_top = bbox.y1 * det_height
+    det_middle = (bbox.x1 + bbox.x2) / 2 * det_width
 
     new_dir = numpy.array([[(det_middle - det_width / 2) / det_focal],
                           [(det_height / 2 - det_bottom) / det_focal],
@@ -74,48 +82,50 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
     distance = vehicle_height / ((det_height / 2 - det_top) / det_focal - (
         det_height / 2 - det_bottom) / det_focal)
 
-    v = distance * new_dir
-    car_position = R.T.dot(v)
+    car_position_wrt_camera = distance * new_dir
+    car_position = camera_rotation.T.dot(car_position_wrt_camera)
 
-    car_ecef = car_position + m
+    car_ecef = car_position + camera_position
     car_lla = pygeo.ECEFToLLA(car_ecef.T)
     car_enu = pygeo.LLAToENU(car_lla).reshape((3, 3))
 
-    middle_x = (x1 + x2) / 2
-    middle_y = (y1 + y2) / 2
+    middle_x = (bbox.x1 + bbox.x2) / 2
+    middle_y = (bbox.y1 + bbox.y2) / 2
 
-    left_ray = numpy.array([[(x1 * photo.width - det_width / 2) / det_focal],
-                            [(det_height / 2 - middle_y * photo.height) / det_focal],
-                            [-1]])
+    left_ray = numpy.array(
+        [[(bbox.x1 * photo.width - det_width / 2) / det_focal],
+         [(det_height / 2 - middle_y * photo.height) / det_focal],
+         [-1]])
 
-    left_ray_enu = car_enu.T.dot(R.T.dot(left_ray))
+    left_ray_enu = car_enu.T.dot(camera_rotation.T.dot(left_ray))
 
-    right_ray = numpy.array([[(x2 * photo.width - det_width / 2) / det_focal],
-                             [(det_height / 2 - middle_y * photo.height) / det_focal],
-                             [-1]])
+    right_ray = numpy.array(
+        [[(bbox.x2 * photo.width - det_width / 2) / det_focal],
+         [(det_height / 2 - middle_y * photo.height) / det_focal],
+         [-1]])
 
-    right_ray_enu = car_enu.T.dot(R.T.dot(right_ray))
+    right_ray_enu = car_enu.T.dot(camera_rotation.T.dot(right_ray))
 
     middle_ray = numpy.array(
         [[(middle_x * photo.width - det_width / 2) / det_focal],
          [(det_height / 2 - middle_y * photo.height) / det_focal],
          [-1]])
 
-    middle_ray_enu = car_enu.T.dot(R.T.dot(middle_ray))
+    middle_ray_enu = car_enu.T.dot(camera_rotation.T.dot(middle_ray))
 
     top_ray = numpy.array(
         [[(middle_x * photo.width - det_width / 2) / det_focal],
-         [(det_height / 2 - y1 * photo.height) / det_focal],
+         [(det_height / 2 - bbox.y1 * photo.height) / det_focal],
          [-1]])
 
-    top_ray_enu = car_enu.T.dot(R.T.dot(top_ray))
+    top_ray_enu = car_enu.T.dot(camera_rotation.T.dot(top_ray))
 
     bottom_ray = numpy.array(
         [[(middle_x * photo.width - det_width / 2) / det_focal],
-         [(det_height / 2 - y2 * photo.height) / det_focal],
+         [(det_height / 2 - bbox.y2 * photo.height) / det_focal],
          [-1]])
 
-    bottom_ray_enu = car_enu.T.dot(R.T.dot(bottom_ray))
+    bottom_ray_enu = car_enu.T.dot(camera_rotation.T.dot(bottom_ray))
 
     middle_angle = math.atan2(middle_ray_enu[1], middle_ray_enu[0])
     right_angle = math.atan2(right_ray_enu[1], right_ray_enu[0])
@@ -126,35 +136,31 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
     else:
         total_angle = middle_angle + angle
 
-    for t in types:
-        """
-        half_width = 0.3048*t.width/2
-        half_length = 0.3048*t.length/2 
-        height = 0.3048*t.height
-        """
-
-        half_width = 0.3048 * t.tight_width / 2
-        half_length = 0.3048 * t.tight_length / 2
-        height = 0.3048 * t.tight_height
+    for vehicle_type in types:
+        half_width = 0.3048 * vehicle_type.tight_width / 2
+        half_length = 0.3048 * vehicle_type.tight_length / 2
+        height = 0.3048 * vehicle_type.tight_height
 
         pointa = numpy.array([[half_width], [half_length]])
         pointb = numpy.array([[half_width],  [-half_length]])
         pointc = numpy.array([[-half_width], [-half_length]])
         pointd = numpy.array([[-half_width], [half_length]])
 
+        half_pi = math.pi / 2
+
         if in_range(total_angle, right_angle, left_angle):
             left = pointd
             right = pointc
 
-        elif in_range(total_angle, left_angle, math.pi / 2 + right_angle):
+        elif in_range(total_angle, left_angle, half_pi + right_angle):
             left = pointa
             right = pointc
 
-        elif in_range(total_angle, math.pi / 2 + right_angle, left_angle + math.pi / 2):
+        elif in_range(total_angle, half_pi + right_angle, left_angle + half_pi):
             left = pointa
             right = pointd
 
-        elif in_range(total_angle, left_angle + math.pi / 2, right_angle + math.pi):
+        elif in_range(total_angle, left_angle + half_pi, right_angle + math.pi):
             left = pointb
             right = pointd
 
@@ -162,15 +168,15 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
             left = pointd
             right = pointa
 
-        elif in_range(total_angle, left_angle + math.pi, 3 * math.pi / 2 + right_angle):
+        elif in_range(total_angle, left_angle + math.pi, 3 * half_pi + right_angle):
             left = pointc
             right = pointa
 
-        elif in_range(total_angle, 3 * math.pi / 2 + right_angle, left_angle + 3 * math.pi / 2):
+        elif in_range(total_angle, 3 * half_pi + right_angle, left_angle + 3 * half_pi):
             left = pointc
             right = pointb
 
-        elif in_range(total_angle, left_angle + 3 * math.pi / 2, right_angle):
+        elif in_range(total_angle, left_angle + 3 * half_pi, right_angle):
             left = pointd
             right = pointb
 
@@ -205,7 +211,8 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
         d_rot = rot.dot(pointd)
 
         distance = numpy.linalg.norm(x)
-        bottom_point = distance * bottom_ray_enu / numpy.linalg.norm(bottom_ray_enu)
+        bottom_point = distance * bottom_ray_enu / \
+            numpy.linalg.norm(bottom_ray_enu)
 
         left_right_position = numpy.array([
             x[0],
@@ -245,10 +252,10 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
             [bottom_point[2][0]],
         ])
 
-        ecef1 = car_enu.dot(position1) + m
-        ecef2 = car_enu.dot(position2) + m
-        ecef3 = car_enu.dot(position3) + m
-        ecef4 = car_enu.dot(position4) + m
+        ecef1 = car_enu.dot(position1) + camera_position
+        ecef2 = car_enu.dot(position2) + camera_position
+        ecef3 = car_enu.dot(position3) + camera_position
+        ecef4 = car_enu.dot(position4) + camera_position
 
         lla1 = pygeo.ECEFToLLA(ecef1.T).flatten()
         lla2 = pygeo.ECEFToLLA(ecef2.T).flatten()
@@ -269,21 +276,24 @@ def compute_car_pose(photo, x1, y1, x2, y2, angle, types):
         collected = func.ST_Collect(collected, pglla4)
         geom = func.ST_ConvexHull(collected)
 
-        world = car_enu.dot(bottom_point) + m
+        world = car_enu.dot(bottom_point) + camera_position
         lla = pygeo.ECEFToLLA(world.T).flatten()
         pglla = func.ST_SetSRID(
             func.ST_MakePoint(lla[1], lla[0], lla[2]), 4326)
 
-        yield pglla, geom, t, total_angle
+        yield pglla, geom, vehicle_type, total_angle
 
 
 @task
 def detect(pid, model_filename):
+    """Runs DPM and computes 3D pose."""
+
     logger = logging.getLogger('detect')
     logger.info((pid, model_filename))
 
     session = nyc3dcars.SESSION()
     try:
+        # pylint: disable-msg=E1101
         num_detections, = session.query(func.count(nyc3dcars.Detection.id)) \
             .join(nyc3dcars.Model) \
             .filter(nyc3dcars.Detection.pid == pid) \
@@ -314,30 +324,37 @@ def detect(pid, model_filename):
 
         # make sure we use at least one entry so we know we tried
         if len(parse_trees) == 0:
-            parse_trees = list(itertools.islice(filtered_model.Parse(-numpy.inf), 1))
+            parse_trees = list(
+                itertools.islice(filtered_model.Parse(-numpy.inf), 1))
 
         assert len(parse_trees) > 0
+
+        bbox_tuple = namedtuple('bbox_tuple', 'x1,x2,y1,y2')
 
         for i, tree in enumerate(parse_trees):
             logger.info((i, len(parse_trees), tree.s))
 
-            x1 = tree.x1 / image.shape[1]
-            x2 = tree.x2 / image.shape[1]
-            y1 = tree.y1 / image.shape[0]
-            y2 = tree.y2 / image.shape[0]
+            bbox = bbox_tuple(
+                x1=tree.x1 / image.shape[1],
+                x2=tree.x2 / image.shape[1],
+                y1=tree.y1 / image.shape[0],
+                y2=tree.y2 / image.shape[0],
+            )
             score = tree.s
             angle = tree.child.rule.metadata.get('angle', None)
 
-            if x1 > x2 or y1 > y2:
+            if bbox.x1 > bbox.x2 or bbox.y1 > bbox.y2:
                 continue
 
-            for lla, geom, vehicletype, world_angle in compute_car_pose(photo, x1, y1, x2, y2, angle, types):
+            car_pose_generator = compute_car_pose(photo, bbox, angle, types)
+
+            for lla, geom, vehicletype, world_angle in car_pose_generator:
                 det = nyc3dcars.Detection(
                     photo=photo,
-                    x1=float(x1),
-                    y1=float(y1),
-                    x2=float(x2),
-                    y2=float(y2),
+                    x1=float(bbox.x1),
+                    y1=float(bbox.y1),
+                    x2=float(bbox.x2),
+                    y2=float(bbox.y2),
                     score=float(score),
                     prob=float(
                         1.0 / (1.0 + math.exp(model.a * score + model.b))),
@@ -366,9 +383,12 @@ def detect(pid, model_filename):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--pid', type=int, required=True)
-    parser.add_argument('--model-filename', required=True)
-    args = parser.parse_args()
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument('--pid', type=int, required=True)
+    PARSER.add_argument('--model', required=True)
+    ARGS = PARSER.parse_args()
 
-    detect(**vars(args))
+    detect(
+        pid=ARGS.pid,
+        model_filename=ARGS.model,
+    )
