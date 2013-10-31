@@ -1,3 +1,6 @@
+"""Implements all of the functions that compute the geographic
+   scores using geodatabase."""
+
 import nyc3dcars
 from sqlalchemy import func
 
@@ -19,6 +22,9 @@ __GEOIDHEIGHT_RASTER__ = None
 
 
 def read_elevation_raster(session):
+    """Reads the entire elevation raster out of the db and saves it locally.
+       postgis is very slow for random access to rasters right now."""
+
     name = 'elevation-cached.tif'
 
     dataset = gdal.Open(name, GA_ReadOnly)
@@ -26,7 +32,9 @@ def read_elevation_raster(session):
         logging.info('elevation raster loaded from cached file')
     else:
         logging.info('building elevation raster from nyc3dcars')
+        # pylint: disable-msg=E1101
         union = func.ST_Union(nyc3dcars.ElevationRaster.rast)
+        # pylint: enable-msg=E1101
         gtiff = func.ST_AsGDALRaster(union, 'GTiff')
 
         raster, = session.query(gtiff) \
@@ -41,6 +49,9 @@ def read_elevation_raster(session):
 
 
 def read_geoidheights_raster(session):
+    """Reads the entire geoidheight raster out of the db and saves it locally.
+       postgis is very slow for random access to rasters right now."""
+
     name = 'geoidheight-cached.tif'
 
     dataset = gdal.Open(name, GA_ReadOnly)
@@ -48,7 +59,9 @@ def read_geoidheights_raster(session):
         logging.info('geoidheight raster loaded from cached file')
     else:
         logging.info('building geoidheight raster from nyc3dcars')
+        # pylint: disable-msg=E1101
         union = func.ST_Union(nyc3dcars.GeoidHeight.rast)
+        # pylint: enable-msg=E1101
         gtiff = func.ST_AsGDALRaster(union, 'GTiff')
 
         raster, = session.query(gtiff) \
@@ -61,12 +74,14 @@ def read_geoidheights_raster(session):
 
     return parse_dataset(dataset)
 
-__Dataset__ = namedtuple('__Dataset__', 'data, x, y, width, height')
-
 
 def parse_dataset(dataset):
+    """Builds an easier to use dataset tuple out of the GDAL dataset."""
+
+    dataset_tuple = namedtuple('dataset_tuple', 'data, x, y, width, height')
+
     geotransform = dataset.GetGeoTransform()
-    return __Dataset__(
+    return dataset_tuple(
         data=dataset.ReadAsArray(),
         x=geotransform[0],
         y=geotransform[3],
@@ -76,17 +91,22 @@ def parse_dataset(dataset):
 
 
 def index_raster(dataset, lat, lon):
+    """Index into raster using lat and long."""
+
     lat_idx = (lat - dataset.y) / dataset.height
     lon_idx = (lon - dataset.x) / dataset.width
     try:
         return dataset.data[lat_idx, lon_idx]
     except IndexError:
-        return float('Infinity')
+        return numpy.inf
 
 
 def roadbed_query(session, detection):
+    """Find roadbeds that intersect the detection's footprint."""
+
     car_lla = detection.lonlat
 
+    # pylint: disable-msg=E1101
     roadbeds4326 = func.ST_Transform(nyc3dcars.Roadbed.geom, 4326)
     car_roadbed_dist = func.ST_Distance(roadbeds4326, car_lla)
 
@@ -95,16 +115,22 @@ def roadbed_query(session, detection):
         nyc3dcars.Roadbed.gid) \
         .filter(func.ST_Intersects(car_lla, roadbeds4326)) \
         .order_by(car_roadbed_dist.asc())
+    # pylint: enable-msg=E1101
     roadbed = query.first()
     return roadbed
 
 
 def centerline_query(session, detection):
+    """Finds the centerline orientation that most closely agrees with
+       detection-intersected roadbeds."""
+
+    # pylint: disable-msg=E1101
     car_polygon = nyc3dcars.Detection.geom
     car_polygon102718 = func.ST_Transform(car_polygon, 102718)
     car_filter = func.ST_Intersects(
         nyc3dcars.Roadbed.geom,
-        car_polygon102718)
+        car_polygon102718
+    )
 
     query = session.query(
         nyc3dcars.Roadbed.gid) \
@@ -150,12 +176,17 @@ def centerline_query(session, detection):
         .filter(nyc3dcars.Roadbed.gid.in_(road_gids)) \
         .filter(nyc3dcars.OsmLine.osm_id >= 0) \
         .filter(nyc3dcars.OsmLine.railway.__eq__(None))
+    # pylint: enable-msg=E1101
 
     for segment in segments:
-        segment_start = pygeo.LLAToECEF(
-            numpy.array([[segment.lats, segment.lons, alt]], dtype=numpy.float64))
-        segment_end = pygeo.LLAToECEF(
-            numpy.array([[segment.late, segment.lone, alt]], dtype=numpy.float64))
+        segment_start = pygeo.LLAToECEF(numpy.array(
+            [[segment.lats, segment.lons, alt]],
+            dtype=numpy.float64
+        ))
+        segment_end = pygeo.LLAToECEF(numpy.array(
+            [[segment.late, segment.lone, alt]],
+            dtype=numpy.float64
+        ))
 
         segment_dir = (segment_end - segment_start)
         segment_dir /= numpy.linalg.norm(segment_dir)
@@ -168,12 +199,16 @@ def centerline_query(session, detection):
 
 
 def elevation_query(session, detection, elevation_raster, geoidheight_raster):
+    """Computes the elevation of the detection above the terrain."""
+
+    # pylint: disable-msg=E1101
     car_lla = nyc3dcars.Detection.lla
     query = session.query(
         func.ST_Y(car_lla),
         func.ST_X(car_lla),
         func.ST_Z(car_lla)) \
         .filter(nyc3dcars.Detection.id == detection.id)
+    # pylint: enable-msg=E1101
     lat, lon, alt = query.one()
 
     elevation = index_raster(elevation_raster, lat, lon)
@@ -184,6 +219,9 @@ def elevation_query(session, detection, elevation_raster, geoidheight_raster):
 
 
 def coverage_query(session, detection):
+    """Computes the percentage of the vehicles on the roadbeds."""
+
+    # pylint: disable-msg=E1101
     car_polygon = nyc3dcars.Detection.geom
     car_polygon102718 = func.ST_Transform(car_polygon, 102718)
     car_road_intersection = func.ST_Area(
@@ -197,6 +235,7 @@ def coverage_query(session, detection):
         func.sum(car_road_intersection / car_area)) \
         .filter(nyc3dcars.Detection.id == detection.id) \
         .filter(car_filter)
+    # pylint: enable-msg=E1101
     coverage, = query.one()
     if coverage is None:
         coverage = 0
@@ -204,6 +243,9 @@ def coverage_query(session, detection):
 
 
 def centerline_angle_diff(detection, centerline_angle, oneway):
+    """Computes the angle between the vehicle orientation
+       and the expected directions of travel."""
+
     ex_cam_angle = detection.world_angle - math.pi / 2
     diff = math.acos(math.cos(centerline_angle - ex_cam_angle))
     twoway_types = ('undefined', 'reversible', 'yes; no', '-1', 'no', None)
@@ -216,10 +258,10 @@ def centerline_angle_diff(detection, centerline_angle, oneway):
 
 
 def get_horizon_endpoints(session, photo):
+    """Computes the endpoints of the horizon in the photo."""
+
     if photo.id in __HORIZON_CACHE__:
         return __HORIZON_CACHE__[photo.id]
-
-    logging.info('computing horizon endpoints %d' % photo.id)
 
     lon, lat, alt = session.query(
         func.ST_X(nyc3dcars.Photo.lla),
@@ -261,6 +303,8 @@ def get_horizon_endpoints(session, photo):
 
 
 def score_horizon(session, detection):
+    """Scores detection based on whether or not it sits above the horizon."""
+
     endpoints = get_horizon_endpoints(session, detection.photo)
 
     Ax = endpoints[0, 0]
@@ -280,8 +324,12 @@ def score_horizon(session, detection):
 
 
 def get_alt_diff(session, detection):
+    """Caches elevation score results."""
+
+    # pylint: disable-msg=W0603
     global __ELEVATION_RASTER__
     global __GEOIDHEIGHT_RASTER__
+    # pylint: enable-msg=W0603
 
     if detection.id in __ALT_DIFF_CACHE__:
         return __ALT_DIFF_CACHE__[detection.id]
@@ -295,11 +343,17 @@ def get_alt_diff(session, detection):
         __GEOIDHEIGHT_RASTER__ = read_geoidheights_raster(session)
 
     __ALT_DIFF_CACHE__[detection.id] = elevation_query(
-        session, detection, __ELEVATION_RASTER__, __GEOIDHEIGHT_RASTER__)
+        session,
+        detection,
+        __ELEVATION_RASTER__,
+        __GEOIDHEIGHT_RASTER__
+    )
     return __ALT_DIFF_CACHE__[detection.id]
 
 
 def elevation_score(session, detection, sigma):
+    """Computes elevation score."""
+
     elevation_diff = get_alt_diff(session, detection)
 
     score = math.exp(-0.5 * (elevation_diff / sigma) ** 2)
@@ -309,6 +363,8 @@ def elevation_score(session, detection, sigma):
 
 
 def get_orientation_error(session, detection):
+    """Computes angle error."""
+
     angle_centerlines = centerline_query(session, detection)
 
     diff = math.pi
@@ -321,6 +377,8 @@ def get_orientation_error(session, detection):
 
 
 def orientation_score_continuous(session, detection):
+    """Angle error which does not consider the discritized DPM viewpoints."""
+
     orientation_error = get_orientation_error(session, detection)
 
     sigma_angle = math.pi / 12
@@ -331,6 +389,8 @@ def orientation_score_continuous(session, detection):
 
 
 def orientation_score_discrete(session, detection):
+    """Angle error which does consider the discritized DPM viewpoints."""
+
     orientation_error = get_orientation_error(session, detection)
 
     if orientation_error < math.radians(11.25):
@@ -342,6 +402,7 @@ def orientation_score_discrete(session, detection):
 
 SCORE = namedtuple('SCORE', 'name, compute, output')
 
+# pylint: disable-msg=E1101
 __Scores__ = [
     SCORE(
         name='prob',
@@ -421,11 +482,13 @@ __Scores__ = [
         output=nyc3dcars.Detection.horizon_score,
     ),
 ]
+# pylint: enable-msg=E1101
 
 SCORES = {s.name: s for s in __Scores__}
 
 METHOD = namedtuple('METHOD', 'name, score, inputs, output, display')
 
+# pylint: disable-msg=E1101
 __Methods__ = [
     METHOD(
         name='reference',
@@ -560,8 +623,15 @@ __Methods__ = [
 
     METHOD(
         name='angle_height',
-        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle_score) * func.greatest(
-            math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
+        score=nyc3dcars.Detection.prob *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.angle_score
+        ) *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.height_score
+        ),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -573,8 +643,15 @@ __Methods__ = [
 
     METHOD(
         name='angle2_height',
-        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.angle2_score) * func.greatest(
-            math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score),
+        score=nyc3dcars.Detection.prob *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.angle2_score
+        ) *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.height_score
+        ),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -597,11 +674,16 @@ __Methods__ = [
 
     METHOD(
         name='all',
-        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height_score) *
+        score=nyc3dcars.Detection.prob *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.height_score
+        ) *
         nyc3dcars.Detection.coverage_score *
         func.greatest(
-            math.sqrt(
-                sys.float_info.min), nyc3dcars.Detection.angle2_score),
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.angle2_score
+        ),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height_score,
@@ -614,11 +696,16 @@ __Methods__ = [
 
     METHOD(
         name='all2',
-        score=nyc3dcars.Detection.prob * func.greatest(math.sqrt(sys.float_info.min), nyc3dcars.Detection.height2_score) *
+        score=nyc3dcars.Detection.prob *
+        func.greatest(
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.height2_score
+        ) *
         nyc3dcars.Detection.coverage_score *
         func.greatest(
-            math.sqrt(
-                sys.float_info.min), nyc3dcars.Detection.angle2_score),
+            math.sqrt(sys.float_info.min),
+            nyc3dcars.Detection.angle2_score
+        ),
         inputs=[
             nyc3dcars.Detection.prob,
             nyc3dcars.Detection.height2_score,
@@ -629,5 +716,6 @@ __Methods__ = [
         display=True,
     ),
 ]
+# pylint: enable-msg=E1101
 
 METHODS = {m.name: m for m in __Methods__}
