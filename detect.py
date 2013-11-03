@@ -332,8 +332,6 @@ def detect(pid, model_filename):
         bbox_tuple = namedtuple('bbox_tuple', 'x1,x2,y1,y2')
 
         for i, tree in enumerate(parse_trees):
-            logger.info((i, len(parse_trees), tree.s))
-
             bbox = bbox_tuple(
                 x1=tree.x1 / image.shape[1],
                 x2=tree.x2 / image.shape[1],
@@ -368,8 +366,6 @@ def detect(pid, model_filename):
                 session.add(det)
 
         session.commit()
-
-        logger.info('Added %d detections' % len(parse_trees))
 
         return pid
 
