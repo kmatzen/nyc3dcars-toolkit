@@ -1,7 +1,7 @@
 """A set of utility functions for querying the database."""
 
 from sqlalchemy import func, desc
-import nyc3dcars
+from nyc3dcars import Photo, Model, Vehicle, Detection
 import math
 import numpy
 
@@ -76,10 +76,10 @@ def get_detections(session, score, query_filters, model):
     # pylint: disable-msg=E1101
     detections = session.query(
         score.label('score')) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True) \
+        .join(Photo) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True) \
         # pylint: enable-msg=E1101
 
     for query_filter in query_filters:
@@ -108,9 +108,9 @@ def get_num_vehicles(session, query_filters):
 
     # pylint: disable-msg=E1101
     num_vehicles_query = session.query(
-        func.count(nyc3dcars.Vehicle.id)) \
-        .join(nyc3dcars.Photo) \
-        .filter(nyc3dcars.Photo.test == True) \
+        func.count(Vehicle.id)) \
+        .join(Photo) \
+        .filter(Photo.test == True) \
         # pylint: enable-msg=E1101
 
     for query_filter in query_filters:
@@ -140,20 +140,20 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
 
     num_vehicles = get_num_vehicles(session, vehicle_filters)
 
-    overlap_score = overlap(nyc3dcars.Detection, nyc3dcars.Vehicle)
+    overlap_score = overlap(Detection, Vehicle)
 
     # pylint: disable-msg=E1101
     labels = session.query(
         overlap_score.label('overlap'),
-        nyc3dcars.Vehicle.id.label('vid'),
-        nyc3dcars.Detection.id.label('did'),
+        Vehicle.id.label('vid'),
+        Detection.id.label('did'),
         score.label('score')) \
-        .select_from(nyc3dcars.Detection) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Vehicle) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True) \
+        .select_from(Detection) \
+        .join(Photo) \
+        .join(Vehicle) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True) \
         .filter(overlap_score > 0.5)
     # pylint: enable-msg=E1101
 
@@ -169,12 +169,12 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
 
     # pylint: disable-msg=E1101
     range_query = session.query(
-        func.min(nyc3dcars.Detection.score),
-        func.max(nyc3dcars.Detection.score)) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True)
+        func.min(Detection.score),
+        func.max(Detection.score)) \
+        .join(Photo) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True)
     # pylint: enable-msg=E1101
 
     for query_filter in detection_filters:
@@ -182,7 +182,7 @@ def precision_recall(session, score, detection_filters, vehicle_filters, model):
 
     low, high = range_query.one()
 
-    model = session.query(nyc3dcars.Model) \
+    model = session.query(Model) \
         .filter_by(filename=model) \
         .one()
 
@@ -212,24 +212,24 @@ def orientation_similarity(session, score, detection_filters,
 
     num_vehicles = get_num_vehicles(session, vehicle_filters)
 
-    overlap_score = overlap(nyc3dcars.Detection, nyc3dcars.Vehicle)
+    overlap_score = overlap(Detection, Vehicle)
 
     # pylint: disable-msg=E1101
     labels = session.query(
         overlap_score.label('overlap'),
-        nyc3dcars.Vehicle.id.label('vid'),
-        nyc3dcars.Detection.id.label('did'),
-        (-nyc3dcars.Vehicle.theta / 180 * math.pi + math.pi).label('gt'),
-        (nyc3dcars.Detection.world_angle).label('d'),
-        ((1 + func.cos(-nyc3dcars.Vehicle.theta / 180 * math.pi + math.pi - nyc3dcars.Detection.world_angle))
+        Vehicle.id.label('vid'),
+        Detection.id.label('did'),
+        (-Vehicle.theta / 180 * math.pi + math.pi).label('gt'),
+        (Detection.world_angle).label('d'),
+        ((1 + func.cos(-Vehicle.theta / 180 * math.pi + math.pi - Detection.world_angle))
          / 2).label('orientation_similarity'),
         score.label('score')) \
-        .select_from(nyc3dcars.Detection) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Vehicle) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True) \
+        .select_from(Detection) \
+        .join(Photo) \
+        .join(Vehicle) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True) \
         .filter(overlap_score > 0.5)
     # pylint: enable-msg=E1101
 
@@ -245,12 +245,12 @@ def orientation_similarity(session, score, detection_filters,
 
     # pylint: disable-msg=E1101
     range_query = session.query(
-        func.min(nyc3dcars.Detection.score),
-        func.max(nyc3dcars.Detection.score)) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True)
+        func.min(Detection.score),
+        func.max(Detection.score)) \
+        .join(Photo) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True)
     # pylint: enable-msg=E1101
 
     for query_filter in detection_filters:
@@ -258,7 +258,7 @@ def orientation_similarity(session, score, detection_filters,
 
     low, high = range_query.one()
 
-    model = session.query(nyc3dcars.Model) \
+    model = session.query(Model) \
         .filter_by(filename=model) \
         .one()
 

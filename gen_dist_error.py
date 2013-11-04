@@ -7,40 +7,41 @@ from query_utils import precision_recall, overlap
 import scores
 import logging
 import numpy
-import nyc3dcars
+from nyc3dcars import SESSION, Detection, Vehicle, Photo, Model
 import argparse
 from sqlalchemy import func, desc, and_
 
-def get_labels(session, score, detection_filters, vehicle_filters, model, threshold):
+def get_labels(session, score, detection_filters, vehicle_filters, 
+               model, threshold):
     """Retrieves all possible detection-annotation pairings
        that satify the VOC criterion."""
 
-    overlap_score = overlap(nyc3dcars.Detection, nyc3dcars.Vehicle)
+    overlap_score = overlap(Detection, Vehicle)
 
     # pylint: disable-msg=E1101
-    dist_x = (func.ST_X(func.ST_Transform(nyc3dcars.Detection.lla, 102718))
-              - func.ST_X(func.ST_Transform(nyc3dcars.Vehicle.lla, 102718))) \
+    dist_x = (func.ST_X(func.ST_Transform(Detection.lla, 102718))
+              - func.ST_X(func.ST_Transform(Vehicle.lla, 102718))) \
         * 0.3048
-    dist_y = (func.ST_Y(func.ST_Transform(nyc3dcars.Detection.lla, 102718))
-              - func.ST_Y(func.ST_Transform(nyc3dcars.Vehicle.lla, 102718))) \
+    dist_y = (func.ST_Y(func.ST_Transform(Detection.lla, 102718))
+              - func.ST_Y(func.ST_Transform(Vehicle.lla, 102718))) \
         * 0.3048
     dist = func.sqrt(dist_x * dist_x + dist_y * dist_y)
     height_diff = func.abs(
-        func.ST_Z(nyc3dcars.Detection.lla) - func.ST_Z(nyc3dcars.Vehicle.lla))
+        func.ST_Z(Detection.lla) - func.ST_Z(Vehicle.lla))
 
     labels = session.query(
         overlap_score.label('overlap'),
-        nyc3dcars.Vehicle.id.label('vid'),
-        nyc3dcars.Detection.id.label('did'),
+        Vehicle.id.label('vid'),
+        Detection.id.label('did'),
         dist.label('dist'),
         height_diff.label('height_diff'),
         score.label('score')) \
-        .select_from(nyc3dcars.Detection) \
-        .join(nyc3dcars.Photo) \
-        .join(nyc3dcars.Vehicle) \
-        .join(nyc3dcars.Model) \
-        .filter(nyc3dcars.Model.filename == model) \
-        .filter(nyc3dcars.Photo.test == True) \
+        .select_from(Detection) \
+        .join(Photo) \
+        .join(Vehicle) \
+        .join(Model) \
+        .filter(Model.filename == model) \
+        .filter(Photo.test == True) \
         .filter(overlap_score > 0.5) \
         .filter(score > threshold)
     # pylint: enable-msg=E1101
@@ -59,24 +60,24 @@ def get_labels(session, score, detection_filters, vehicle_filters, model, thresh
 def gen_dist_error(model, methods, dataset_id):
     """Generates the horizontal and vertical 3D error statistics."""
 
-    session = nyc3dcars.SESSION()
+    session = SESSION()
     try:
         # pylint: disable-msg=E1101
-        model_id, = session.query(nyc3dcars.Model.id) \
+        model_id, = session.query(Model.id) \
             .filter_by(filename=model) \
             .one()
 
-        todo, = session.query(func.count(nyc3dcars.Photo.id)) \
+        todo, = session.query(func.count(Photo.id)) \
             .outerjoin((
-                nyc3dcars.Detection,
+                Detection,
                 and_(
-                    nyc3dcars.Detection.pid == nyc3dcars.Photo.id,
-                    nyc3dcars.Detection.pmid == model_id
+                    Detection.pid == Photo.id,
+                    Detection.pmid == model_id
                 )
             )) \
-            .filter(nyc3dcars.Photo.test == True) \
-            .filter(nyc3dcars.Detection.id == None) \
-            .filter(nyc3dcars.Photo.dataset_id == dataset_id) \
+            .filter(Photo.test == True) \
+            .filter(Detection.id == None) \
+            .filter(Photo.dataset_id == dataset_id) \
             .one()
         # pylint: enable-msg=E1101
 
@@ -90,12 +91,12 @@ def gen_dist_error(model, methods, dataset_id):
         for name in methods:
             nms_method = scores.METHODS[name]
             # pylint: disable-msg=E1101
-            todo, = session.query(func.count(nyc3dcars.Detection.id)) \
-                .join(nyc3dcars.Model) \
-                .join(nyc3dcars.Photo) \
-                .filter(nyc3dcars.Photo.test == True) \
-                .filter(nyc3dcars.Model.filename == model) \
-                .filter(nyc3dcars.Photo.dataset_id == dataset_id) \
+            todo, = session.query(func.count(Detection.id)) \
+                .join(Model) \
+                .join(Photo) \
+                .filter(Photo.test == True) \
+                .filter(Model.filename == model) \
+                .filter(Photo.dataset_id == dataset_id) \
                 .filter(nms_method.output == None) \
                 .one()
             # pylint: enable-msg=E1101
@@ -109,7 +110,7 @@ def gen_dist_error(model, methods, dataset_id):
             return
 
         # pylint: disable-msg=E1101
-        dataset_id = [nyc3dcars.Photo.dataset_id == dataset_id]
+        dataset_id = [Photo.dataset_id == dataset_id]
         # pylint: enable-msg=E1101
 
         for method in methods:
@@ -118,7 +119,11 @@ def gen_dist_error(model, methods, dataset_id):
             msg = '%s method: %s' % (model, method)
             logging.info(msg)
             points = precision_recall(
-                session, nms_method.score, dataset_id + selected, dataset_id, model)
+                session, 
+                nms_method.score, 
+                dataset_id + selected, 
+                dataset_id, model
+            )
             idx = numpy.abs(points[:, 0] - 0.9).argmin()
             logging.info(points[idx, :])
             labels = get_labels(

@@ -10,7 +10,7 @@ import logging
 import itertools
 import scipy.integrate
 import numpy
-import nyc3dcars
+from nyc3dcars import SESSION, Model, Photo, Detection
 import argparse
 from sqlalchemy import func, and_
 
@@ -19,7 +19,7 @@ from sqlalchemy import func, and_
 def gen_results(model, methods, aos, dataset_id):
     """Computes PR curve and optionally OS-R curve."""
 
-    session = nyc3dcars.SESSION()
+    session = SESSION()
     try:
 
         difficulties = {
@@ -31,21 +31,21 @@ def gen_results(model, methods, aos, dataset_id):
         }
 
         # pylint: disable-msg=E1101
-        model_id, = session.query(nyc3dcars.Model.id) \
-            .filter(nyc3dcars.Model.filename == model) \
+        model_id, = session.query(Model.id) \
+            .filter(Model.filename == model) \
             .one()
 
-        todo, = session.query(func.count(nyc3dcars.Photo.id)) \
+        todo, = session.query(func.count(Photo.id)) \
             .outerjoin((
-                nyc3dcars.Detection,
+                Detection,
                 and_(
-                    nyc3dcars.Detection.pid == nyc3dcars.Photo.id,
-                    nyc3dcars.Detection.pmid == model_id
+                    Detection.pid == Photo.id,
+                    Detection.pmid == model_id
                 )
             )) \
-            .filter(nyc3dcars.Photo.test == True) \
-            .filter(nyc3dcars.Detection.id == None) \
-            .filter(nyc3dcars.Photo.dataset_id == dataset_id) \
+            .filter(Photo.test == True) \
+            .filter(Detection.id == None) \
+            .filter(Photo.dataset_id == dataset_id) \
             .one()
         # pylint: enable-msg=E1101
 
@@ -59,12 +59,12 @@ def gen_results(model, methods, aos, dataset_id):
         for name in methods:
             nms_method = scores.METHODS[name]
             # pylint: disable-msg=E1101
-            todo, = session.query(func.count(nyc3dcars.Detection.id)) \
-                .join(nyc3dcars.Model) \
-                .join(nyc3dcars.Photo) \
-                .filter(nyc3dcars.Photo.test == True) \
-                .filter(nyc3dcars.Model.filename == model) \
-                .filter(nyc3dcars.Photo.dataset_id == dataset_id) \
+            todo, = session.query(func.count(Detection.id)) \
+                .join(Model) \
+                .join(Photo) \
+                .filter(Photo.test == True) \
+                .filter(Model.filename == model) \
+                .filter(Photo.dataset_id == dataset_id) \
                 .filter(nms_method.output == None) \
                 .one()
             # pylint: enable-msg=E1101
@@ -78,7 +78,7 @@ def gen_results(model, methods, aos, dataset_id):
             return
 
         # pylint: disable-msg=E1101
-        dataset_id = [nyc3dcars.Photo.dataset_id == dataset_id]
+        dataset_id = [Photo.dataset_id == dataset_id]
         # pylint: enable-msg=E1101
 
         for daynight, difficulty in itertools.product(daynights, difficulties):

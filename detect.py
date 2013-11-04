@@ -10,7 +10,7 @@ import logging
 import math
 from collections import namedtuple
 
-import nyc3dcars
+from nyc3dcars import SESSION, Photo, Detection, Model, VehicleType, IMAGE_DIR
 from sqlalchemy import func
 
 import numpy
@@ -291,33 +291,33 @@ def detect(pid, model_filename):
     logger = logging.getLogger('detect')
     logger.info((pid, model_filename))
 
-    session = nyc3dcars.SESSION()
+    session = SESSION()
     try:
         # pylint: disable-msg=E1101
-        num_detections, = session.query(func.count(nyc3dcars.Detection.id)) \
-            .join(nyc3dcars.Model) \
-            .filter(nyc3dcars.Detection.pid == pid) \
-            .filter(nyc3dcars.Model.filename == model_filename) \
+        num_detections, = session.query(func.count(Detection.id)) \
+            .join(Model) \
+            .filter(Detection.pid == pid) \
+            .filter(Model.filename == model_filename) \
             .one()
 
         if num_detections > 0:
             logger.info('Already computed')
             return pid
 
-        model = session.query(nyc3dcars.Model) \
+        model = session.query(Model) \
             .filter_by(filename=model_filename) \
             .one()
 
-        photo = session.query(nyc3dcars.Photo) \
+        photo = session.query(Photo) \
             .filter_by(id=pid) \
             .one()
 
-        types = session.query(nyc3dcars.VehicleType) \
-            .filter(nyc3dcars.VehicleType.id.in_([202, 8, 150, 63, 123, 16]))
+        types = session.query(VehicleType) \
+            .filter(VehicleType.id.in_([202, 8, 150, 63, 123, 16]))
 
         pydro_model = pydro.io.LoadModel(model.filename)
         image = scipy.misc.imread(
-            os.path.join(nyc3dcars.IMAGE_DIR, photo.filename))
+            os.path.join(IMAGE_DIR, photo.filename))
         pyramid = pydro.features.BuildPyramid(image, model=pydro_model)
         filtered_model = pydro_model.Filter(pyramid)
         parse_trees = list(filtered_model.Parse(model.thresh))
@@ -331,7 +331,7 @@ def detect(pid, model_filename):
 
         bbox_tuple = namedtuple('bbox_tuple', 'x1,x2,y1,y2')
 
-        for i, tree in enumerate(parse_trees):
+        for tree in parse_trees:
             bbox = bbox_tuple(
                 x1=tree.x1 / image.shape[1],
                 x2=tree.x2 / image.shape[1],
@@ -347,7 +347,7 @@ def detect(pid, model_filename):
             car_pose_generator = compute_car_pose(photo, bbox, angle, types)
 
             for lla, geom, vehicletype, world_angle in car_pose_generator:
-                det = nyc3dcars.Detection(
+                det = Detection(
                     photo=photo,
                     x1=float(bbox.x1),
                     y1=float(bbox.y1),

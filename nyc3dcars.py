@@ -45,7 +45,7 @@ class VehicleType(__Base__):
 
     """Sedan, minivan, etc."""
 
-    __tablename__ = 'vehicletypes'
+    __tablename__ = 'vehicle_types'
     __table_args__ = {'autoload': True}
     detections = relationship('Detection', backref='type')
     vehicles = relationship('Vehicle', backref='type')
@@ -88,7 +88,7 @@ class Model(__Base__):
     detections = relationship('Detection', backref='model')
 
 
-class OsmLine(__Base__):
+class PlanetOsmLine(__Base__):
 
     """OpenStreetMap polylines.  Roads, railways, etc."""
 
@@ -109,7 +109,7 @@ class GeoidHeight(__Base__):
 
     """Distance used to turn ellipsoid height into orthometric height."""
 
-    __tablename__ = 'geoidheights'
+    __tablename__ = 'geoid_heights'
     __table_args__ = {'autoload': True}
 
 
@@ -137,11 +137,11 @@ class Sidewalk(__Base__):
     __table_args__ = {'autoload': True}
 
 
-class ElevationRaster(__Base__):
+class Elevation(__Base__):
 
     """Terrain elevation raster from USGS."""
 
-    __tablename__ = 'elevation'
+    __tablename__ = 'elevations'
     __table_args__ = {'autoload': True}
 
 __Base__.metadata.create_all(__engine__)

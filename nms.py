@@ -9,7 +9,7 @@ import logging
 import argparse
 
 # nyc3dcars imports
-import nyc3dcars
+from nyc3dcars import SESSION, Model, Detection
 
 from celery.task import task
 
@@ -22,7 +22,7 @@ import scores
 def nms(pid, model, method):
     """Preforms NMS on detections."""
 
-    session = nyc3dcars.SESSION()
+    session = SESSION()
 
     logging.info((pid, model, method))
 
@@ -32,33 +32,29 @@ def nms(pid, model, method):
 
         set_nms = str(scoring_method.output).split('.')[-1]
 
-        session.query(nyc3dcars.Model) \
+        session.query(Model) \
             .filter_by(filename=model) \
             .one()
 
         # pylint: disable-msg=E1101
-        todo, = session.query(func.count(nyc3dcars.Detection.id)) \
-            .join(nyc3dcars.Model) \
-            .filter(nyc3dcars.Detection.pid == pid) \
+        todo, = session.query(func.count(Detection.id)) \
+            .join(Model) \
+            .filter(Detection.pid == pid) \
             .filter(or_(*[m == None for m in scoring_method.inputs])) \
-            .filter(nyc3dcars.Model.filename == model) \
+            .filter(Model.filename == model) \
             .one()
         # pylint: enable-msg=E1101
 
         if todo > 0:
             raise Exception('Some input was not yet computed')
 
-        pos = 0
         while True:
-            if pos % 10 == 0:
-                logging.info(pos)
-
             # pylint: disable-msg=E1101
-            result = session.query(nyc3dcars.Detection) \
-                .join(nyc3dcars.Model) \
-                .filter(nyc3dcars.Detection.pid == pid) \
+            result = session.query(Detection) \
+                .join(Model) \
+                .filter(Detection.pid == pid) \
                 .filter(scoring_method.output == None) \
-                .filter(nyc3dcars.Model.filename == model)
+                .filter(Model.filename == model)
             # pylint: enable-msg=E1101
 
             result = result \
@@ -70,22 +66,20 @@ def nms(pid, model, method):
 
             setattr(result, set_nms, True)
 
-            overlap = query_utils.overlap(result, nyc3dcars.Detection)
+            overlap = query_utils.overlap(result, Detection)
             covered = overlap > 0.3
 
             # pylint: disable-msg=E1101
-            blacklist = session.query(nyc3dcars.Detection) \
-                .join(nyc3dcars.Model) \
-                .filter(nyc3dcars.Detection.pid == pid) \
+            blacklist = session.query(Detection) \
+                .join(Model) \
+                .filter(Detection.pid == pid) \
                 .filter(scoring_method.output == None) \
-                .filter(nyc3dcars.Model.filename == model) \
+                .filter(Model.filename == model) \
                 .filter(covered)
             # pylint: enable-msg=E1101
 
             for elt in blacklist:
                 setattr(elt, set_nms, False)
-
-            pos += 1
 
         session.commit()
 

@@ -5,7 +5,7 @@
 
 import celery
 
-import nyc3dcars
+from nyc3dcars import SESSION, Photo, Model
 
 import scores
 
@@ -20,12 +20,12 @@ from nms import nms
 def test(model, remote, methods, dataset_id):
     """Executes the testing protocol."""
 
-    session = nyc3dcars.SESSION()
+    session = SESSION()
     try:
-        test_set = session.query(nyc3dcars.Photo) \
+        test_set = session.query(Photo) \
             .filter_by(test=True, dataset_id=dataset_id)
 
-        session.query(nyc3dcars.Model) \
+        session.query(Model) \
             .filter_by(filename=model) \
             .one()
 

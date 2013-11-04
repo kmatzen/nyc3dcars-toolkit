@@ -10,7 +10,7 @@ import argparse
 import math
 
 # nyc3dcars imports
-import nyc3dcars
+from nyc3dcars import SESSION, Model, Detection
 
 # math imports
 import numpy
@@ -25,21 +25,21 @@ def geo_rescore(pid, model, method):
     """Apply geographic rescoring."""
 
     logging.info(str((pid, model, method)))
-    session = nyc3dcars.SESSION()
+    session = SESSION()
     try:
         numpy.seterr(all='raise')
 
-        session.query(nyc3dcars.Model) \
+        session.query(Model) \
             .filter_by(filename=model) \
             .one()
 
         nms_method = scores.METHODS[method]
 
         # pylint: disable-msg=E1101
-        detections = session.query(nyc3dcars.Detection) \
-            .join(nyc3dcars.Model) \
-            .filter(nyc3dcars.Detection.pid == pid) \
-            .filter(nyc3dcars.Model.filename == model) \
+        detections = session.query(Detection) \
+            .join(Model) \
+            .filter(Detection.pid == pid) \
+            .filter(Model.filename == model) \
             .filter(or_(*[m == None for m in nms_method.inputs]))
         # pylint: enable-msg=E1101
 

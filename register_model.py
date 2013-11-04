@@ -3,12 +3,12 @@
 import argparse
 import math
 
-import nyc3dcars
+from nyc3dcars import SESSION, Model
 
 import pydro.io
 
 def register_model (filename, a, b, thresh, viewpoint):
-    session = nyc3dcars.SESSION()
+    session = SESSION()
 
     if viewpoint:
         model = pydro.io.LoadModel(filename)
@@ -18,7 +18,7 @@ def register_model (filename, a, b, thresh, viewpoint):
 
         pydro.io.SaveModel(filename, model)
 
-    model = nyc3dcars.Model(
+    model = Model(
         filename=filename,
         a=a,
         b=b,
