@@ -2,7 +2,7 @@
    scores using geodatabase."""
 
 from nyc3dcars import Photo, Detection, Elevation, \
-                      PlanetOsmLine, Roadbed, GeoidHeight
+    PlanetOsmLine, Roadbed, GeoidHeight
 from sqlalchemy import func
 
 import sys

@@ -12,6 +12,7 @@ from collections import namedtuple
 
 from nyc3dcars import SESSION, Photo, Detection, Model, VehicleType, IMAGE_DIR
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 import numpy
 import scipy.misc
@@ -45,7 +46,7 @@ def in_range(val, low, high):
     return val < high
 
 
-def compute_car_pose(photo, bbox, angle, types):
+def compute_car_pose(photo, bbox, angle, vehicle_types):
     """Compute 3D pose for 2D bounding box."""
 
     camera_rotation = numpy.array([[photo.r11, photo.r12, photo.r13],
@@ -54,18 +55,16 @@ def compute_car_pose(photo, bbox, angle, types):
     camera_position = - \
         camera_rotation.T.dot([[photo.t1], [photo.t2], [photo.t3]])
 
-    """
-     select KM_Scale(
-            KM_Rotate(
-            KM_ToENU(
-            ST_SetSRID(
-            ST_MakePoint(-74.0064, 40.7142), 4326)),
-            KM_Point3D(0,0,1), false), -0.7583);
-    """
-    camera_position[0] += -0.158366558899042248
-    camera_position[1] += 0.552522748735624458
-    camera_position[2] += -0.494628684117799755
+    # Small correction factor computed from NYC3DCars annotation results.
+    dataset_correction = numpy.array([
+        [photo.dataset.t1],
+        [photo.dataset.t2],
+        [photo.dataset.t3],
+    ])
 
+    camera_position += dataset_correction
+
+    # Just approximate it for this first calculation and correct it later.
     vehicle_height = 1.445
 
     det_focal = photo.focal
@@ -136,7 +135,7 @@ def compute_car_pose(photo, bbox, angle, types):
     else:
         total_angle = middle_angle + angle
 
-    for vehicle_type in types:
+    for vehicle_type in vehicle_types:
         half_width = 0.3048 * vehicle_type.tight_width / 2
         half_length = 0.3048 * vehicle_type.tight_length / 2
         height = 0.3048 * vehicle_type.tight_height
@@ -309,10 +308,11 @@ def detect(pid, model_filename):
             .one()
 
         photo = session.query(Photo) \
+            .options(joinedload('dataset')) \
             .filter_by(id=pid) \
             .one()
 
-        types = session.query(VehicleType) \
+        vehicle_types = session.query(VehicleType) \
             .filter(VehicleType.id.in_([202, 8, 150, 63, 123, 16]))
 
         pydro_model = pydro.io.LoadModel(model.filename)
@@ -344,9 +344,14 @@ def detect(pid, model_filename):
             if bbox.x1 > bbox.x2 or bbox.y1 > bbox.y2:
                 continue
 
-            car_pose_generator = compute_car_pose(photo, bbox, angle, types)
+            car_pose_generator = compute_car_pose(
+                photo,
+                bbox,
+                angle,
+                vehicle_types
+            )
 
-            for lla, geom, vehicletype, world_angle in car_pose_generator:
+            for lla, geom, vehicle_type, world_angle in car_pose_generator:
                 det = Detection(
                     photo=photo,
                     x1=float(bbox.x1),
@@ -361,7 +366,7 @@ def detect(pid, model_filename):
                     lla=lla,
                     geom=geom,
                     world_angle=float(world_angle),
-                    type=vehicletype,
+                    vehicle_type=vehicle_type,
                 )
                 session.add(det)
 

@@ -7,14 +7,16 @@ from nyc3dcars import SESSION, Model
 
 import pydro.io
 
-def register_model (filename, a, b, thresh, viewpoint):
+
+def register_model(filename, a, b, thresh, viewpoint):
     session = SESSION()
 
     if viewpoint:
         model = pydro.io.LoadModel(filename)
 
         for i in xrange(16):
-            model.start.rules[i].metadata = {'angle':(math.pi - i*math.pi/8)%(2*math.pi)}
+            model.start.rules[i].metadata = {
+                'angle': (math.pi - i * math.pi / 8) % (2 * math.pi)}
 
         pydro.io.SaveModel(filename, model)
 

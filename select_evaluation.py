@@ -7,29 +7,33 @@ import math
 from nyc3dcars import SESSION, Photo, VehicleType, Vehicle
 import labeler
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 import pygeo
 
 
 def convert_vehicle(nyc3dcars_session, labeler_vehicle):
     """Converts the vehicle from Labeler format to NYC3DCars format."""
 
-    photo = nyc3dcars_session.query(Photo) \
+    photo, lat, lon, alt = nyc3dcars_session.query(
+        Photo,
+        func.ST_Y(Photo.lla),
+        func.ST_X(Photo.lla),
+        func.ST_Z(Photo.lla)) \
         .filter_by(id=labeler_vehicle.revision.annotation.pid) \
+        .options(joinedload('dataset')) \
         .one()
     left = labeler_vehicle.x1
     right = labeler_vehicle.x2
     top = labeler_vehicle.y1
     bottom = labeler_vehicle.y2
 
-    lat, lon, alt = nyc3dcars_session.query(
-        func.ST_Y(Photo.lla),
-        func.ST_X(Photo.lla),
-        func.ST_Z(Photo.lla)) \
-        .filter(Photo.id == photo.id) \
-        .one()
-
     camera_lla = numpy.array([[lat], [lon], [alt]])
     camera_enu = pygeo.LLAToENU(camera_lla.T).reshape((3, 3))
+    dataset_correction = numpy.array([
+        [photo.dataset.t1],
+        [photo.dataset.t2],
+        [photo.dataset.t3],
+    ])
     camera_rotation = numpy.array([
         [photo.r11, photo.r12, photo.r13],
         [photo.r21, photo.r22, photo.r23],
@@ -39,9 +43,11 @@ def convert_vehicle(nyc3dcars_session, labeler_vehicle):
     camera_up = camera_enu.T.dot(
         camera_rotation.T.dot(numpy.array([[0], [1], [0]])))
     offset = numpy.array([[-labeler_vehicle.x], [-labeler_vehicle.z], [0]])
-    camera_offset = camera_up * photo.camera_height / camera_up[2]
+    camera_offset = camera_up * \
+        labeler_vehicle.revision.cameraheight / camera_up[2]
     total_offset = offset - camera_offset
     ecef_camera = pygeo.LLAToECEF(camera_lla.T).T
+    ecef_camera += dataset_correction
     ecef_total_offset = camera_enu.dot(total_offset)
     vehicle_ecef = ecef_camera + ecef_total_offset
 
@@ -177,7 +183,9 @@ def select_evaluation():
 
     try:
         # Reset photos
-        photos = nyc3dcars_session.query(Photo)
+        photos = nyc3dcars_session.query(Photo) \
+            .options(joinedload('dataset'))
+
         for photo in photos:
             photo.daynight = None
 
@@ -193,6 +201,9 @@ def select_evaluation():
             .join(labeler.Annotation) \
             .join(labeler.User) \
             .join(labeler.Revision) \
+            .options(joinedload('daynights')) \
+            .options(joinedload('annotations.flags')) \
+            .options(joinedload('annotations')) \
             .filter(labeler.Revision.final == True) \
             .filter(labeler.User.trust == True) \
             .distinct()
@@ -309,6 +320,12 @@ def select_evaluation():
                 .join(labeler.Revision) \
                 .join(labeler.Annotation) \
                 .join(labeler.User) \
+                .options(joinedload('revision')) \
+                .options(joinedload('revision.annotation')) \
+                .options(joinedload('revision.annotation.user')) \
+                .options(joinedload('occlusionrankings')) \
+                .options(joinedload('occlusionrankings.occlusion_session')) \
+                .options(joinedload('bbox_sessions')) \
                 .filter(labeler.User.trust == True) \
                 .filter(labeler.Annotation.pid == photo) \
                 .filter(labeler.Revision.final == True) \

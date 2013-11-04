@@ -47,8 +47,8 @@ class VehicleType(__Base__):
 
     __tablename__ = 'vehicle_types'
     __table_args__ = {'autoload': True}
-    detections = relationship('Detection', backref='type')
-    vehicles = relationship('Vehicle', backref='type')
+    detections = relationship('Detection', backref='vehicle_type')
+    vehicles = relationship('Vehicle', backref='vehicle_type')
 
 
 class Detection(__Base__):
@@ -69,6 +69,16 @@ class Photo(__Base__):
     geom = deferred(Column('geom', Binary))
     vehicles = relationship('Vehicle', backref='photo')
     detections = relationship('Detection', backref='photo')
+
+
+class Dataset(__Base__):
+
+    """Contains the reconstruction correction factors."""
+
+    __tablename__ = 'datasets'
+    __table_args__ = {'autoload': True}
+
+    photos = relationship('Photo', backref='dataset')
 
 
 class Vehicle(__Base__):

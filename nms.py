@@ -32,16 +32,15 @@ def nms(pid, model, method):
 
         set_nms = str(scoring_method.output).split('.')[-1]
 
-        session.query(Model) \
+        # pylint: disable-msg=E1101
+        mid, = session.query(Model.id) \
             .filter_by(filename=model) \
             .one()
 
-        # pylint: disable-msg=E1101
         todo, = session.query(func.count(Detection.id)) \
-            .join(Model) \
             .filter(Detection.pid == pid) \
             .filter(or_(*[m == None for m in scoring_method.inputs])) \
-            .filter(Model.filename == model) \
+            .filter(Detection.mid == mid) \
             .one()
         # pylint: enable-msg=E1101
 
@@ -51,10 +50,9 @@ def nms(pid, model, method):
         while True:
             # pylint: disable-msg=E1101
             result = session.query(Detection) \
-                .join(Model) \
                 .filter(Detection.pid == pid) \
                 .filter(scoring_method.output == None) \
-                .filter(Model.filename == model)
+                .filter(Detection.mid == mid)
             # pylint: enable-msg=E1101
 
             result = result \
@@ -71,10 +69,9 @@ def nms(pid, model, method):
 
             # pylint: disable-msg=E1101
             blacklist = session.query(Detection) \
-                .join(Model) \
                 .filter(Detection.pid == pid) \
                 .filter(scoring_method.output == None) \
-                .filter(Model.filename == model) \
+                .filter(Detection.mid == mid) \
                 .filter(covered)
             # pylint: enable-msg=E1101
 

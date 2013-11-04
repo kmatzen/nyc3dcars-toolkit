@@ -11,7 +11,8 @@ from nyc3dcars import SESSION, Detection, Vehicle, Photo, Model
 import argparse
 from sqlalchemy import func, desc, and_
 
-def get_labels(session, score, detection_filters, vehicle_filters, 
+
+def get_labels(session, score, detection_filters, vehicle_filters,
                model, threshold):
     """Retrieves all possible detection-annotation pairings
        that satify the VOC criterion."""
@@ -72,7 +73,7 @@ def gen_dist_error(model, methods, dataset_id):
                 Detection,
                 and_(
                     Detection.pid == Photo.id,
-                    Detection.pmid == model_id
+                    Detection.mid == model_id
                 )
             )) \
             .filter(Photo.test == True) \
@@ -119,9 +120,9 @@ def gen_dist_error(model, methods, dataset_id):
             msg = '%s method: %s' % (model, method)
             logging.info(msg)
             points = precision_recall(
-                session, 
-                nms_method.score, 
-                dataset_id + selected, 
+                session,
+                nms_method.score,
+                dataset_id + selected,
                 dataset_id, model
             )
             idx = numpy.abs(points[:, 0] - 0.9).argmin()

@@ -15,7 +15,6 @@ import argparse
 from sqlalchemy import func, and_
 
 
-
 def gen_results(model, methods, aos, dataset_id):
     """Computes PR curve and optionally OS-R curve."""
 
@@ -40,7 +39,7 @@ def gen_results(model, methods, aos, dataset_id):
                 Detection,
                 and_(
                     Detection.pid == Photo.id,
-                    Detection.pmid == model_id
+                    Detection.mid == model_id
                 )
             )) \
             .filter(Photo.test == True) \
