@@ -1,0 +1,17 @@
+GDAL==1.9.0
+SQLAlchemy==0.8.3
+amqp==1.3.3
+anyjson==0.3.3
+argparse==1.2.1
+billiard==3.3.0.7
+celery==3.1.3
+distribute==0.6.24
+kombu==3.0.4
+msgpack-python==0.4.0
+numpy==1.8.0
+psycopg2==2.5.1
+pydro==0.0
+pygeo==1.0
+pytz==2013.8
+scipy==0.13.0
+wsgiref==0.1.2
