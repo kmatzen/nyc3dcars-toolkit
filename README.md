@@ -68,7 +68,7 @@ Of course, you need not follow these directions exactly if you're familiar with 
 Execution
 =========
 
-I usually run the test.py script with the --remote flag which http://www.celeryproject.org/ to distribute the computation on a cluster.  If you don't supply this flag, it will run everything with one thread.  Even if you don't want to run the testing protocol on a cluster, I still recommend remote mode to enable parallel computation.  It only takes a couple of steps to get working.  One is to use a Celery backend.  I use RabbitMQ.  Instructions on installing RabbitMQ for Ubuntu can be found here http://www.rabbitmq.com/install-debian.html.  The second step is to run a celery worker on each node.  I've supplied an example celeryconfig.py.  To run a worker, execute
+I usually run the test.py script with the --remote flag with http://www.celeryproject.org/ to distribute the computation on a cluster.  If you don't supply this flag, it will run everything with one thread.  Even if you don't want to run the testing protocol on a cluster, I still recommend remote mode to enable parallel computation.  It only takes a couple of steps to get working.  One is to use a Celery backend.  I use RabbitMQ.  Instructions on installing RabbitMQ for Ubuntu can be found here http://www.rabbitmq.com/install-debian.html.  The second step is to run a celery worker on each node.  I've supplied an example celeryconfig.py.  To run a worker, execute
 ```
 celery worker -l info -c <concurrency>
 ```
