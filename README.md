@@ -1,6 +1,34 @@
 nyc3dcars-toolkit
 =================
 
+Database
+========
+
+The database for this project consists of two core components.  One is the vehicle annotation database that we constructed, which we call NYC3DCars.  The second is a database that consists of pre-processed geographic data from sources such as NYC OpenData, OpenStreetMap, and USGS.  This section will describe a few of the important characteristics of the NYC3DCars dataset.
+
+Photos
+* id - Internal photo id.
+* filename - Corresponds to filename in separately distributed photo sets (see nyc3d.cs.cornell.edu for a download link).
+* cameramake, cameramodel, focallength, etc. - Extracted from camera EXIF metadata.
+* focal, k1, k2, t1...t3, r11...r33 - Bundler output with georegistration.
+* lla - Geographic location of camera center.
+* geom - Camera frustum projected onto ground (polygon).
+* test - Can either be true, false, or null.  If null, the photo has not yet been annotated.  If true, then the photo is to be used for testing purposes.  If false, then the photo is to be used for training or cross validation purposes.
+* dataset_id - A separate table contains translation correction factors derived from how users adjusted the ground plane when annotating photos.  This is only applicable for the Times Square dataset at the moment.  We will compute similar values for the other datasets shortly.
+* daytime - True means day, false means night, null means not yet annotated.
+
+Vehicles
+* id - Interval vehicle id.
+* pid - Interval photo id.
+* x1, y1, x2, y2 - 2D bounding box.  Values span [0,1] and image coordinates are x1\*width, y1\*height, etc.  x1 is left and y1 is top.
+* occlusion - An integer indicating labeled occlusion level.  0 is unoccluded.
+* view\_theta, view\_phi - The estimated viewpoint of the vehicle.
+* geom - 2D footprint of the vehicle on the ground.
+* lla - Geographic point in the horizontal center and vertical bottom of the vehicle.
+* type_id - A separate table contains the set of vehicles we gave annotators and this value references those.
+
+The second part of the database, the geodatabase, is more complex and we recommend reading scores.py to see how we use it.  There is a lot of data that we did not use from it, so explore the database to find out more.
+
 Setup
 =====
 
