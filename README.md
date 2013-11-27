@@ -113,3 +113,5 @@ The testing procedure is built like a pipeline.  There are three stages represen
 Each of these scripts can be run individually on specific photos or the test.py script can be used to execute the entire pipeline for all photos in a particular dataset.
 
 gen\_results.py is used to compute precision/orientation similarity and recall curves and gen\_dist\_error.py is used to compute 3D pose localization error.
+
+[![githalytics.com alpha](https://cruel-carlota.pagodabox.com/0983fed0852711c1d303a0feeffab057 "githalytics.com")](http://githalytics.com/kmatzen/nyc3dcars-toolkit)
