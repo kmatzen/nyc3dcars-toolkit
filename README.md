@@ -10,7 +10,7 @@ Photos
 * id - Internal photo id.
 * filename - Corresponds to filename in separately distributed photo sets (see nyc3d.cs.cornell.edu for a download link).
 * cameramake, cameramodel, focallength, etc. - Extracted from camera EXIF metadata.
-* focal, k1, k2, t1...t3, r11...r33 - Bundler output with georegistration.
+* focal, k1, k2, t1...t3, r11...r33 - Bundler output with georegistration.  See http://www.cs.cornell.edu/~snavely/bundler/bundler-v0.3-manual.html#S6 for more details.
 * lla - Geographic location of camera center.
 * geom - Camera frustum projected onto ground (polygon).
 * test - Can either be true, false, or null.  If null, the photo has not yet been annotated.  If true, then the photo is to be used for testing purposes.  If false, then the photo is to be used for training or cross validation purposes.
